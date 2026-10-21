@@ -44,6 +44,41 @@ Optional settings:
 Restart the backend after editing `.env`. To check which providers are live, open
 http://localhost:8000/api/providers. A provider shows `"configured": true` once its key is set.
 
+## Run it locally on Windows (PowerShell)
+
+Run these from the repo folder, e.g. `C:\Users\arnav\nl-analytics-agent`:
+
+```powershell
+# 1. Create a virtual environment and install the backend packages (one time)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1          # the prompt now starts with (.venv)
+pip install -r backend\requirements-dev.txt
+
+# 2. Start PostgreSQL. With Docker Desktop:
+docker compose up db -d
+#    or install PostgreSQL 16 for Windows and set DATABASE_URL in .env to match your password, e.g.
+#    DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/analytics
+
+# 3. Create the "analytics" database and load the sample data (one time)
+cd backend
+python -m app.seed
+
+# 4. Start the API on http://localhost:8000
+uvicorn app.main:app --reload
+```
+
+In a new terminal, run `.\.venv\Scripts\Activate.ps1` again before any Python command.
+`ModuleNotFoundError: No module named 'pydantic'` (or any other package) means the virtual environment isn't
+active, or step 1 was skipped.
+
+If PowerShell says running scripts is disabled, run this once, then activate again:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+To run the evaluation, go back to the repo root with the venv active and run `python eval\run_eval.py`.
+
 ## 3. Deploy on Railway
 
 1. Sign in at [railway.com](https://railway.com) with GitHub.
