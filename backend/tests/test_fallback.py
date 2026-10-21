@@ -129,3 +129,12 @@ def test_build_providers_order_keys_and_overrides():
 def test_unknown_provider_is_rejected():
     with pytest.raises(ValueError, match="Unknown provider"):
         build_providers(Settings(_env_file=None, llm_providers="gemini,zai"))
+
+
+def test_settings_read_the_repo_root_env_file():
+    from pathlib import Path
+
+    from app.config import Settings
+
+    root_env = Path(__file__).resolve().parents[2] / ".env"
+    assert root_env in [Path(p) for p in Settings.model_config["env_file"]]
