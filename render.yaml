@@ -1,0 +1,34 @@
+# Render Blueprint: one Docker web service (API + built frontend) and a Postgres database, both on the free plan.
+# In Render: New -> Blueprint -> pick this repo. Render asks for each `sync: false` key; leave unused ones empty.
+services:
+  - type: web
+    name: nl-analytics-agent
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    # The free plan has no pre-deploy step, so load the sample data on start (skipped once it's there).
+    dockerCommand: sh -c "python -m app.seed --if-empty && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nl-analytics-db
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+
+databases:
+  - name: nl-analytics-db
+    plan: free
+    databaseName: analytics
