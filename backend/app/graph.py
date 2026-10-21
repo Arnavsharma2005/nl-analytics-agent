@@ -1,5 +1,6 @@
 """The LangGraph pipeline: router -> SQL (with validate/repair loop) -> execute -> chart -> summary."""
 
+import operator
 import time
 from functools import wraps
 from typing import Annotated, Any, TypedDict
@@ -11,7 +12,7 @@ from app.agents.router import answer_schema_question, route
 from app.agents.sql_agent import write_sql
 from app.agents.summary import summarize
 from app.db import Database, QueryError
-from app.llm import LLM
+from app.llm import LLM, AllProvidersFailed
 from app.sql_guard import SQLValidationError, validate_sql
 
 OUT_OF_SCOPE_REPLY = (
@@ -45,15 +46,21 @@ class AnalyticsState(TypedDict, total=False):
     answer: str
     error: str
     timings: Annotated[dict[str, float], _add_timings]
+    llm_calls: Annotated[list[dict[str, Any]], operator.add]  # which provider served each step, incl. failovers
 
 
-def _timed(name: str):
+def _timed(name: str, llm: LLM | None = None):
     def deco(fn):
         @wraps(fn)
         def wrapper(state):
+            logs = hasattr(llm, "start_log")
+            if logs:
+                llm.start_log()
             start = time.perf_counter()
             update = fn(state)
             update["timings"] = {name: time.perf_counter() - start}
+            if logs:
+                update["llm_calls"] = [{"step": name, **call} for call in llm.take_log()]
             return update
 
         return wrapper
@@ -66,25 +73,28 @@ def build_graph(llm: LLM, db: Database, max_attempts: int = 3, rows_for_llm: int
     schema_text = schema.describe()
     table_names = sorted(schema.tables)
 
-    @_timed("router")
+    def timed(name: str):
+        return _timed(name, llm)
+
+    @timed("router")
     def router_node(state: AnalyticsState):
         decision = route(llm, state["question"], table_names)
         return {"intent": decision.intent, "route_reason": decision.reason, "failures": [], "sql_attempts": 0}
 
-    @_timed("schema_answer")
+    @timed("schema_answer")
     def schema_node(state: AnalyticsState):
         return {"answer": answer_schema_question(llm, state["question"], schema_text)}
 
     def out_of_scope_node(state: AnalyticsState):
         return {"answer": OUT_OF_SCOPE_REPLY}
 
-    @_timed("sql_agent")
+    @timed("sql_agent")
     def write_sql_node(state: AnalyticsState):
         previous = [(f["sql"], f["error"]) for f in state.get("failures", [])]
         draft = write_sql(llm, state["question"], schema_text, previous)
         return {"sql": draft.sql, "sql_reasoning": draft.reasoning, "sql_attempts": state.get("sql_attempts", 0) + 1}
 
-    @_timed("validate")
+    @timed("validate")
     def validate_node(state: AnalyticsState):
         try:
             sql = validate_sql(state["sql"], set(table_names))
@@ -94,7 +104,7 @@ def build_graph(llm: LLM, db: Database, max_attempts: int = 3, rows_for_llm: int
             return {"sql_ok": False, "failures": state.get("failures", []) + [failure]}
         return {"sql": sql, "sql_ok": True}
 
-    @_timed("execute")
+    @timed("execute")
     def execute_node(state: AnalyticsState):
         try:
             result = db.run(state["sql"])
@@ -103,15 +113,19 @@ def build_graph(llm: LLM, db: Database, max_attempts: int = 3, rows_for_llm: int
             return {"sql_ok": False, "failures": state.get("failures", []) + [failure]}
         return {"columns": result.columns, "rows": result.rows, "truncated": result.truncated}
 
-    @_timed("chart_agent")
+    @timed("chart_agent")
     def chart_node(state: AnalyticsState):
         spec, source = choose_chart(llm, state["question"], state["columns"], state["rows"], sample=10)
         return {"chart": spec.model_dump(), "chart_source": source}
 
-    @_timed("summary_agent")
+    @timed("summary_agent")
     def summary_node(state: AnalyticsState):
         rows = state["rows"]
-        text = summarize(llm, state["question"], state["columns"], rows[:rows_for_llm], len(rows), state.get("truncated", False))
+        try:
+            text = summarize(llm, state["question"], state["columns"], rows[:rows_for_llm], len(rows), state.get("truncated", False))
+        except AllProvidersFailed:
+            # The chart and rows are still worth returning when no model is left to write the summary.
+            text = None
         return {"summary": text}
 
     def give_up_node(state: AnalyticsState):
@@ -171,4 +185,5 @@ def to_response(state: AnalyticsState) -> dict[str, Any]:
         "attempts": state.get("sql_attempts", 0),
         "failures": state.get("failures", []),
         "timings": state.get("timings", {}),
+        "llm_calls": state.get("llm_calls", []),
     }

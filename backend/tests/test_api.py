@@ -40,3 +40,25 @@ def test_ask_stream(db):
     assert events[:2] == ["step", "step"] and events[-1] == "result"
     assert [d["node"] for d in data[:-1]] == ["router", "sql_agent", "validate", "execute", "chart_agent", "summary_agent"]
     assert data[-1]["summary"] == "Summary."
+
+
+def test_providers_endpoint_and_all_failed_is_503(db):
+    from app.llm import AllProvidersFailed, FallbackLLM, Provider
+
+    class Down:
+        def invoke(self, messages):
+            err = Exception("Rate limit reached")
+            err.status_code = 429
+            raise err
+
+    llm = FallbackLLM([Provider("groq", "Groq · m", "https://x", "m", "k"), Provider("zai", "Z.ai · m", "https://x", "m", None)],
+                      client_factory=lambda p, t: Down())
+    graph = build_graph(llm, db)
+    c = TestClient(create_app(graph_factory=lambda: graph, db_factory=lambda: db, llm_factory=lambda: llm))
+    r = c.post("/api/ask", json={"question": "Revenue by region"})
+    assert r.status_code == 503 and r.json()["errors"] == [{"provider": "Groq · m", "error": "rate limited"}]
+    status = c.get("/api/providers").json()
+    assert status[0]["configured"] and status[0]["cooling_down_s"] > 0
+    assert status[1] == {"name": "zai", "label": "Z.ai · m", "configured": False, "cooling_down_s": 0}
+    assert "key" not in str(status)
+    assert AllProvidersFailed

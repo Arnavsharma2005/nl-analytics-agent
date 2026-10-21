@@ -8,9 +8,30 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/analytics"
-    # Any model string accepted by langchain's init_chat_model, e.g.
-    # "google_genai:gemini-2.5-flash", "anthropic:claude-sonnet-5-5", "openai:gpt-4.1-mini".
-    llm_model: str = "google_genai:gemini-2.5-flash"
+    # Providers tried in order; see app/providers.py. The first one with a key that responds wins.
+    llm_providers: str = "gemini,groq,openrouter,nvidia,mistral,cohere,zai,cloudflare"
+    llm_timeout_s: float = 30
+
+    gemini_api_key: str | None = None
+    google_api_key: str | None = None  # accepted as an alias for GEMINI_API_KEY
+    groq_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    nvidia_api_key: str | None = None
+    mistral_api_key: str | None = None
+    cohere_api_key: str | None = None
+    zai_api_key: str | None = None
+    cloudflare_api_token: str | None = None
+    cloudflare_account_id: str | None = None
+
+    # Optional model overrides, e.g. GROQ_MODEL=qwen/qwen3.6-27b
+    gemini_model: str | None = None
+    groq_model: str | None = None
+    openrouter_model: str | None = None
+    nvidia_model: str | None = None
+    mistral_model: str | None = None
+    cohere_model: str | None = None
+    zai_model: str | None = None
+    cloudflare_model: str | None = None
 
     max_sql_attempts: int = 3
     max_result_rows: int = 500

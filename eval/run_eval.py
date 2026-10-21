@@ -12,7 +12,7 @@ import json
 import statistics
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -53,9 +53,10 @@ def main() -> int:
         return 1 if bad else 0
 
     from app.graph import build_graph
-    from app.llm import LangChainLLM
+    from app.providers import build_llm
 
-    graph = build_graph(LangChainLLM(settings.llm_model), db, settings.max_sql_attempts, settings.rows_for_llm)
+    llm = build_llm(settings)
+    graph = build_graph(llm, db, settings.max_sql_attempts, settings.rows_for_llm)
     results = []
     for i, q in enumerate(questions):
         if i and args.delay:
@@ -75,6 +76,9 @@ def main() -> int:
             "intent": state.get("intent"), "sql": state.get("sql"), "attempts": state.get("sql_attempts", 0),
             "latency_s": round(latency, 2), "error": error,
             "gold_rows": len(gold), "pred_rows": None if pred is None else len(pred),
+            # The provider that wrote the final SQL (fallbacks can mix models within one run).
+            "sql_provider": next((c["provider"] for c in reversed(state.get("llm_calls", []))
+                                  if c["step"] == "sql_agent" and c["ok"]), None),
         })
         mark = "PASS" if correct else "FAIL"
         print(f"#{q['id']:>2} {mark} {latency:5.1f}s  attempts={results[-1]['attempts']}  {q['question']}")
@@ -85,7 +89,8 @@ def main() -> int:
     for r in results:
         by_cat[r["category"]].append(r["correct"])
     summary = {
-        "model": settings.llm_model,
+        "providers_configured": [p["label"] for p in llm.status() if p["configured"]],
+        "sql_written_by": dict(Counter(r["sql_provider"] for r in results if r["sql_provider"])),
         "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "questions": len(results),
         "correct": sum(r["correct"] for r in results),

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AskResult, Step } from "../types";
+import type { AskResult, LLMCall, Step } from "../types";
 import ChartView from "./ChartView";
 import DataTable from "./DataTable";
 
@@ -37,6 +37,21 @@ function Progress({ steps }: { steps: Step[] }) {
   );
 }
 
+/** "Answered by Groq · gpt-oss-120b (Gemini rate limited)" from the per-step provider log. */
+function modelNote(calls: LLMCall[]): string {
+  const ok = calls.filter((c) => c.ok);
+  if (!ok.length) return "";
+  const main = (ok.find((c) => c.step === "sql_agent") ?? ok[ok.length - 1]).provider;
+  const failed = new Map<string, string>();
+  for (const c of calls) if (!c.ok && !failed.has(c.provider)) failed.set(c.provider, c.error ?? "failed");
+  const others = new Set(ok.map((c) => c.provider));
+  others.delete(main);
+  let note = `Answered by ${main}`;
+  if (others.size) note += ` + ${[...others].join(", ")}`;
+  if (failed.size) note += ` (fell back: ${[...failed].map(([p, e]) => `${p.split(" · ")[0]} ${e}`).join(", ")})`;
+  return note;
+}
+
 export default function ResultCard({ entry }: { entry: Entry }) {
   const [tab, setTab] = useState<"none" | "sql" | "data">("none");
   const r = entry.result;
@@ -48,6 +63,7 @@ export default function ResultCard({ entry }: { entry: Entry }) {
       {pending && <Progress steps={entry.steps} />}
       {entry.error && <p className="error">Something went wrong: {entry.error}</p>}
       {r && r.intent !== "data_query" && <p className="answer">{r.answer}</p>}
+      {r && r.intent !== "data_query" && modelNote(r.llm_calls ?? []) && <p className="muted small">{modelNote(r.llm_calls ?? [])}</p>}
       {r && r.error && <p className="error">{r.error}</p>}
       {r && r.intent === "data_query" && !r.error && (
         <>
@@ -59,6 +75,8 @@ export default function ResultCard({ entry }: { entry: Entry }) {
               Data ({r.rows.length}{r.truncated ? "+" : ""} {r.rows.length === 1 ? "row" : "rows"})
             </button>
             <span className="muted">
+              {modelNote(r.llm_calls ?? [])}
+              {r.llm_calls?.some((c) => c.ok) ? " · " : ""}
               {r.attempts > 1 ? `Fixed its own SQL after ${r.attempts - 1} failed attempt${r.attempts > 2 ? "s" : ""} · ` : ""}
               {Object.values(r.timings).reduce((a, b) => a + b, 0).toFixed(1)}s
             </span>
