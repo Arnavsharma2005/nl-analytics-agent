@@ -92,3 +92,4 @@ th { position: sticky; top: 0; background: var(--surface); font-weight: 600; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .recharts-default-tooltip { background: var(--surface) !important; border-color: var(--border) !important; border-radius: 8px; }
 .recharts-text { fill: var(--muted); }
+.small { font-size: 0.82rem; margin: 6px 0 0; }

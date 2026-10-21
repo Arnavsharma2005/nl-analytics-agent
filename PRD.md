@@ -123,8 +123,8 @@ Single page React app (Vite + TypeScript, Recharts):
 
 ## 8. Tech stack
 
-Python 3.12, LangGraph, LangChain (model-agnostic via `init_chat_model`; default Gemini 2.5 Flash for its free
-tier, Claude or OpenAI configurable by env var), FastAPI, SQLAlchemy + psycopg, sqlglot, PostgreSQL 16,
+Python 3.12, LangGraph, LangChain (OpenAI-compatible clients with an automatic fallback chain
+across eight free-tier providers: Gemini, Groq, OpenRouter, NVIDIA, Mistral, Cohere, Z.ai and Cloudflare), FastAPI, SQLAlchemy + psycopg, sqlglot, PostgreSQL 16,
 React + Vite + TypeScript + Recharts, Docker, Railway, GitHub Actions (tests).
 
 ## 9. Evaluation
@@ -152,5 +152,5 @@ React + Vite + TypeScript + Recharts, Docker, Railway, GitHub Actions (tests).
 | --- | --- |
 | LLM writes plausible but wrong SQL | Schema with sample values in the prompt, validator retries, eval set to measure |
 | Prompt injection via the question ("drop table …") | Read-only role and transaction, SELECT-only validator |
-| Free-tier LLM rate limits during a demo | Retry with backoff; model is swappable by env var |
+| Free-tier LLM rate limits during a demo | Fallback chain across 8 providers; a rate-limited or failing provider is skipped and cooled down |
 | Summary invents numbers | Summary prompt is given only the rows and told to cite only them |

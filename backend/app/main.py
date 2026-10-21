@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -13,7 +13,8 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.db import Database
 from app.graph import build_graph, to_response
-from app.llm import LangChainLLM
+from app.llm import AllProvidersFailed, FallbackLLM
+from app.providers import build_llm
 
 EXAMPLES = [
     "What was our monthly revenue in 2025?",
@@ -50,12 +51,18 @@ def get_db() -> Database:
 
 
 @lru_cache
+def get_llm() -> FallbackLLM:
+    # One instance per process, so a provider that hit its rate limit is skipped by every request.
+    return build_llm(get_settings())
+
+
+@lru_cache
 def get_graph():
     s = get_settings()
-    return build_graph(LangChainLLM(s.llm_model), get_db(), s.max_sql_attempts, s.rows_for_llm)
+    return build_graph(get_llm(), get_db(), s.max_sql_attempts, s.rows_for_llm)
 
 
-def create_app(graph_factory=get_graph, db_factory=get_db) -> FastAPI:
+def create_app(graph_factory=get_graph, db_factory=get_db, llm_factory=get_llm) -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="NL Business Analytics Agent")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
@@ -68,6 +75,15 @@ def create_app(graph_factory=get_graph, db_factory=get_db) -> FastAPI:
         except Exception as e:  # noqa: BLE001
             raise HTTPException(503, f"database unavailable: {e}") from e
         return {"status": "ok"}
+
+    @app.exception_handler(AllProvidersFailed)
+    def all_failed(_, exc: AllProvidersFailed):
+        return JSONResponse(status_code=503, content={"detail": str(exc), "errors": exc.errors})
+
+    @app.get("/api/providers")
+    def providers():
+        """Configured model providers in fallback order, and which are cooling down. Never returns keys."""
+        return llm_factory().status()
 
     @app.get("/api/examples")
     def examples():

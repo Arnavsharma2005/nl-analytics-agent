@@ -71,3 +71,14 @@ def test_empty_result_gets_a_table(db):
     llm = FakeLLM(sql=["SELECT order_id FROM orders WHERE order_date > '2030-01-01'"])
     out = run(llm, db)
     assert out["rows"] == [] and out["chart"]["type"] == "table"
+
+
+def test_summary_failure_still_returns_the_chart(db):
+    from app.llm import AllProvidersFailed
+
+    class NoSummary(FakeLLM):
+        def text(self, system, user):
+            raise AllProvidersFailed([{"provider": "x", "error": "rate limited"}])
+
+    out = run(NoSummary(sql=[REVENUE_BY_REGION]), db)
+    assert out["error"] is None and out["summary"] is None and len(out["rows"]) == 6

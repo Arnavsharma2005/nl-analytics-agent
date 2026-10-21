@@ -25,6 +25,15 @@ export interface AskResult {
   error: string | null;
   attempts: number;
   timings: Record<string, number>;
+  llm_calls: LLMCall[];
+}
+
+export interface LLMCall {
+  step: string;
+  provider: string;
+  ok: boolean;
+  error?: string;
+  seconds: number;
 }
 
 export interface Step {
