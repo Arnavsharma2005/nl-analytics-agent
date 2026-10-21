@@ -1,0 +1,14 @@
+fastapi==0.158.1
+uvicorn[standard]==0.54.0
+sse-starlette==3.5.0
+pydantic-settings==2.16.1
+SQLAlchemy==2.1.6
+psycopg[binary]==3.3.6
+sqlglot==30.24.0
+langgraph==1.2.16
+langchain==1.4.6
+langchain-core==1.6.12
+langchain-google-genai==4.4.2
+langchain-anthropic==1.7.6
+langchain-openai==1.7.2
+PyYAML==6.0.3

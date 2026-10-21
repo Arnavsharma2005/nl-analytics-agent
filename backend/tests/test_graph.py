@@ -1,0 +1,73 @@
+from app.agents.chart import ChartSpec
+from app.graph import OUT_OF_SCOPE_REPLY, build_graph, to_response
+
+from .conftest import FakeLLM
+
+REVENUE_BY_REGION = """
+SELECT r.name AS region, ROUND(SUM(oi.quantity * oi.unit_price)::numeric, 2) AS revenue
+FROM orders o JOIN customers c ON c.customer_id = o.customer_id
+JOIN regions r ON r.region_id = c.region_id
+JOIN order_items oi ON oi.order_id = o.order_id
+WHERE o.status = 'completed' GROUP BY r.name ORDER BY revenue DESC
+"""
+
+
+def run(llm, db, question="Revenue by region"):
+    return to_response(build_graph(llm, db).invoke({"question": question}))
+
+
+def test_happy_path(db):
+    llm = FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="Revenue"))
+    out = run(llm, db)
+    assert out["error"] is None
+    assert out["columns"] == ["region", "revenue"]
+    assert len(out["rows"]) == 6
+    assert out["chart"]["type"] == "bar" and out["chart_source"] == "llm"
+    assert out["summary"] == "Summary."
+    assert out["attempts"] == 1
+    assert set(out["timings"]) >= {"router", "sql_agent", "validate", "execute", "chart_agent", "summary_agent"}
+
+
+def test_repairs_bad_sql_using_the_error(db):
+    llm = FakeLLM(sql=["SELECT region_name, SUM(total) FROM orders GROUP BY 1", REVENUE_BY_REGION])
+    out = run(llm, db)
+    assert out["error"] is None
+    assert out["attempts"] == 2
+    assert "does not exist" in out["failures"][0]["error"]
+    # The second SQL-agent call is shown the failed query and the database's error.
+    retry_prompt = [user for name, user in llm.calls if name == "SQLDraft"][1]
+    assert "region_name" in retry_prompt and "does not exist" in retry_prompt
+
+
+def test_runtime_errors_are_retried(db):
+    llm = FakeLLM(sql=["SELECT 1 / (COUNT(*) - COUNT(*)) AS x FROM orders", REVENUE_BY_REGION])
+    out = run(llm, db)
+    assert out["failures"][0]["stage"] == "execute"
+    assert out["error"] is None and out["attempts"] == 2
+
+
+def test_gives_up_after_max_attempts(db):
+    llm = FakeLLM(sql=["DELETE FROM orders"])
+    out = run(llm, db, "delete all orders please")
+    assert out["attempts"] == 3
+    assert out["error"].startswith("I couldn't build a working query")
+    assert out["rows"] == []
+
+
+def test_out_of_scope_skips_sql(db):
+    llm = FakeLLM(intent="out_of_scope")
+    out = run(llm, db, "What's the weather in Bengaluru?")
+    assert out["answer"] == OUT_OF_SCOPE_REPLY
+    assert out["sql"] is None
+    assert [name for name, _ in llm.calls] == ["RouteDecision"]
+
+
+def test_schema_question(db):
+    out = run(FakeLLM(intent="schema_question"), db, "What data do you have?")
+    assert out["answer"] == "We have sales data."
+
+
+def test_empty_result_gets_a_table(db):
+    llm = FakeLLM(sql=["SELECT order_id FROM orders WHERE order_date > '2030-01-01'"])
+    out = run(llm, db)
+    assert out["rows"] == [] and out["chart"]["type"] == "table"

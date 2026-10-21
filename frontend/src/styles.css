@@ -1,0 +1,94 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1b1f27;
+  --muted: #5d6675;
+  --border: #e1e4ea;
+  --grid: #eceef2;
+  --accent: #2b59c3;
+  --accent-soft: #e8eefb;
+  --error: #b42318;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1218;
+    --surface: #171b23;
+    --text: #e6e9ef;
+    --muted: #98a1b2;
+    --border: #2a303c;
+    --grid: #232835;
+    --accent: #7aa2ff;
+    --accent-soft: #1d2740;
+    --error: #ff8a80;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 920px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 1.7rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+.muted { color: var(--muted); }
+button { font: inherit; cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.6; }
+
+.ask { display: flex; gap: 8px; margin: 20px 0 12px; }
+.ask input {
+  flex: 1; min-width: 0; padding: 12px 14px; font: inherit; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+}
+.ask input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.ask button { padding: 0 20px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .ask button { color: #0f1218; } }
+
+.examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.examples button {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 999px; padding: 5px 12px; font-size: 0.86rem; text-align: left;
+}
+.examples button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+.schema { margin: 16px 0 0; font-size: 0.9rem; }
+.schema summary { cursor: pointer; color: var(--accent); }
+.schema ul { padding-left: 18px; }
+.schema .cols { color: var(--muted); font-size: 0.82rem; }
+
+.feed { display: flex; flex-direction: column; gap: 16px; margin-top: 24px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+.question { font-size: 1.05rem; margin: 0 0 10px; }
+.summary, .answer { margin: 0 0 12px; }
+.error { color: var(--error); margin: 0; }
+
+.progress { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; font-size: 0.85rem; }
+.progress li { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+.progress li.done { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.progress li.active { border-color: var(--accent); color: var(--text); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+
+.chart { margin: 4px -8px 0; }
+.kpis { display: flex; flex-wrap: wrap; gap: 12px; }
+.kpi { padding: 14px 18px; border-radius: 12px; background: var(--accent-soft); min-width: 160px; }
+.kpi-value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+.kpi-label { color: var(--muted); font-size: 0.85rem; }
+
+.meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: 0.85rem; }
+.meta button { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 8px; padding: 3px 10px; }
+.meta button.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.meta .muted { margin-left: auto; }
+
+.sql pre {
+  margin: 8px 0 0; padding: 12px; overflow-x: auto; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--border); font-size: 0.82rem;
+}
+.table-wrap { overflow-x: auto; margin-top: 8px; max-height: 380px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface); font-weight: 600; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.recharts-default-tooltip { background: var(--surface) !important; border-color: var(--border) !important; border-radius: 8px; }
+.recharts-text { fill: var(--muted); }
