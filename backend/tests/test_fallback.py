@@ -128,4 +128,4 @@ def test_build_providers_order_keys_and_overrides():
 
 def test_unknown_provider_is_rejected():
     with pytest.raises(ValueError, match="Unknown provider"):
-        build_providers(Settings(_env_file=None, llm_providers="gemini,openai"))
+        build_providers(Settings(_env_file=None, llm_providers="gemini,zai"))
