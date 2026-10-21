@@ -3,6 +3,8 @@
 Ask a business question in plain English, get back a chart, a short insight summary, and the SQL behind it.
 Built so business stakeholders don't have to wait on an analyst to write SQL for them.
 
+**Live demo:** https://nl-analytics-agent.onrender.com (free hosting, so the first visit can take up to a minute to wake up)
+
 > "Which region grew revenue fastest from 2024 to 2025?" → a bar chart, a two-sentence answer, and a
 > validated PostgreSQL query you can inspect.
 
