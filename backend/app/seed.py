@@ -11,6 +11,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import psycopg
+from psycopg import sql
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from app.config import get_settings
 
@@ -172,10 +174,23 @@ def is_seeded(database_url: str) -> bool:
         return conn.execute("SELECT to_regclass('public.order_items') IS NOT NULL").fetchone()[0]
 
 
+def ensure_database(database_url: str) -> bool:
+    """Create the database named in the URL if it doesn't exist yet. Returns True if it was created."""
+    params = conninfo_to_dict(database_url.replace("postgresql+psycopg://", "postgresql://"))
+    name = params.get("dbname") or params.get("user")
+    with psycopg.connect(make_conninfo(**{**params, "dbname": "postgres"}), autocommit=True) as conn:
+        if conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,)).fetchone():
+            return False
+        conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+        return True
+
+
 if __name__ == "__main__":
     import sys
 
     url = get_settings().database_url
+    if ensure_database(url):
+        print("Created the database.")
     if "--if-empty" in sys.argv and is_seeded(url):
         print("Database already seeded; skipping.")
         raise SystemExit(0)

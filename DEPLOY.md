@@ -56,10 +56,10 @@ pip install -r backend\requirements-dev.txt
 
 # 2. Start PostgreSQL. With Docker Desktop:
 docker compose up db -d
-#    or install PostgreSQL 16 for Windows and create a database named "analytics".
-#    Then set DATABASE_URL in .env to match your username and password.
+#    or install PostgreSQL 16 for Windows and set DATABASE_URL in .env to match your password, e.g.
+#    DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/analytics
 
-# 3. Load the sample data (one time)
+# 3. Create the "analytics" database and load the sample data (one time)
 cd backend
 python -m app.seed
 
