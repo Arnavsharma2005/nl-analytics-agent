@@ -176,7 +176,14 @@ def is_seeded(database_url: str) -> bool:
 
 def ensure_database(database_url: str) -> bool:
     """Create the database named in the URL if it doesn't exist yet. Returns True if it was created."""
-    params = conninfo_to_dict(database_url.replace("postgresql+psycopg://", "postgresql://"))
+    dsn = database_url.replace("postgresql+psycopg://", "postgresql://")
+    # Hosted databases (Render, Railway) already exist and may not let us into the "postgres" database.
+    try:
+        psycopg.connect(dsn).close()
+        return False
+    except psycopg.OperationalError:
+        pass
+    params = conninfo_to_dict(dsn)
     name = params.get("dbname") or params.get("user")
     with psycopg.connect(make_conninfo(**{**params, "dbname": "postgres"}), autocommit=True) as conn:
         if conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,)).fetchone():

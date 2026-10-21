@@ -106,6 +106,18 @@ To run the evaluation, go back to the repo root with the venv active and run `py
 
 To change a key later, edit it under **Variables**. Railway redeploys automatically.
 
+## Or deploy on Render (free)
+
+1. Sign in at [render.com](https://render.com) with GitHub.
+2. Click **New** → **Blueprint** → pick `Arnavsharma2005/nl-analytics-agent`. Render reads `render.yaml` and creates
+   the web service and a free PostgreSQL database.
+3. Render asks for each API key. Paste the ones you have and leave the rest empty, then click **Apply**.
+4. The first start loads the sample data. When the deploy is live, open the `onrender.com` URL shown on the service
+   and check `/api/health` returns `{"status":"ok"}`.
+
+The free web service sleeps after 15 minutes without traffic, so the first request after that takes about a minute.
+Render deletes free databases 30 days after creation unless you upgrade.
+
 ## 4. Change the frontend after deploying
 
 The frontend is in `frontend/src` (React + Vite). Work on it locally:
