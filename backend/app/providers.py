@@ -12,10 +12,7 @@ CATALOG = {
     "gemini": ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-flash-latest"),
     "groq": ("Groq", "https://api.groq.com/openai/v1", "openai/gpt-oss-120b"),
     "openrouter": ("OpenRouter", "https://openrouter.ai/api/v1", "nvidia/nemotron-3-super-120b-a12b:free"),
-    "nvidia": ("NVIDIA", "https://integrate.api.nvidia.com/v1", "openai/gpt-oss-120b"),
     "mistral": ("Mistral", "https://api.mistral.ai/v1", "mistral-large-latest"),
-    "cohere": ("Cohere", "https://api.cohere.ai/compatibility/v1", "command-a-03-2025"),
-    "zai": ("Z.ai", "https://api.z.ai/api/paas/v4", "glm-4.7-flash"),
     "cloudflare": ("Cloudflare", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1", "@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
 }
 
@@ -25,10 +22,7 @@ def build_providers(s: Settings) -> list[Provider]:
         "gemini": s.gemini_api_key or s.google_api_key,
         "groq": s.groq_api_key,
         "openrouter": s.openrouter_api_key,
-        "nvidia": s.nvidia_api_key,
         "mistral": s.mistral_api_key,
-        "cohere": s.cohere_api_key,
-        "zai": s.zai_api_key,
         # Cloudflare's URL contains the account id, so the provider only counts as configured with both.
         "cloudflare": s.cloudflare_api_token if s.cloudflare_account_id else None,
     }

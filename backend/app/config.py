@@ -9,17 +9,14 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/analytics"
     # Providers tried in order; see app/providers.py. The first one with a key that responds wins.
-    llm_providers: str = "gemini,groq,openrouter,nvidia,mistral,cohere,zai,cloudflare"
+    llm_providers: str = "gemini,groq,openrouter,mistral,cloudflare"
     llm_timeout_s: float = 30
 
     gemini_api_key: str | None = None
     google_api_key: str | None = None  # accepted as an alias for GEMINI_API_KEY
     groq_api_key: str | None = None
     openrouter_api_key: str | None = None
-    nvidia_api_key: str | None = None
     mistral_api_key: str | None = None
-    cohere_api_key: str | None = None
-    zai_api_key: str | None = None
     cloudflare_api_token: str | None = None
     cloudflare_account_id: str | None = None
 
@@ -27,10 +24,7 @@ class Settings(BaseSettings):
     gemini_model: str | None = None
     groq_model: str | None = None
     openrouter_model: str | None = None
-    nvidia_model: str | None = None
     mistral_model: str | None = None
-    cohere_model: str | None = None
-    zai_model: str | None = None
     cloudflare_model: str | None = None
 
     max_sql_attempts: int = 3

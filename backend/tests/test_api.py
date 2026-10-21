@@ -51,7 +51,7 @@ def test_providers_endpoint_and_all_failed_is_503(db):
             err.status_code = 429
             raise err
 
-    llm = FallbackLLM([Provider("groq", "Groq · m", "https://x", "m", "k"), Provider("zai", "Z.ai · m", "https://x", "m", None)],
+    llm = FallbackLLM([Provider("groq", "Groq · m", "https://x", "m", "k"), Provider("mistral", "Mistral · m", "https://x", "m", None)],
                       client_factory=lambda p, t: Down())
     graph = build_graph(llm, db)
     c = TestClient(create_app(graph_factory=lambda: graph, db_factory=lambda: db, llm_factory=lambda: llm))
@@ -59,6 +59,6 @@ def test_providers_endpoint_and_all_failed_is_503(db):
     assert r.status_code == 503 and r.json()["errors"] == [{"provider": "Groq · m", "error": "rate limited"}]
     status = c.get("/api/providers").json()
     assert status[0]["configured"] and status[0]["cooling_down_s"] > 0
-    assert status[1] == {"name": "zai", "label": "Z.ai · m", "configured": False, "cooling_down_s": 0}
+    assert status[1] == {"name": "mistral", "label": "Mistral · m", "configured": False, "cooling_down_s": 0}
     assert "key" not in str(status)
     assert AllProvidersFailed

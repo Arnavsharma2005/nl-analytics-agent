@@ -34,18 +34,15 @@ Queries run inside a `READ ONLY` transaction with a 10 s statement timeout and a
 ## Model fallback chain
 
 The agent runs on free-tier APIs, which rate-limit and go down. So every model call goes through a
-fallback chain of eight providers, all reached through their OpenAI-compatible endpoints:
+fallback chain of five providers, all reached through their OpenAI-compatible endpoints:
 
 | # | Provider | Default model | Key variable |
 | --- | --- | --- | --- |
 | 1 | Google Gemini | `gemini-flash-latest` | `GEMINI_API_KEY` |
 | 2 | Groq | `openai/gpt-oss-120b` | `GROQ_API_KEY` |
 | 3 | OpenRouter | `nvidia/nemotron-3-super-120b-a12b:free` | `OPENROUTER_API_KEY` |
-| 4 | NVIDIA Build | `openai/gpt-oss-120b` | `NVIDIA_API_KEY` |
-| 5 | Mistral | `mistral-large-latest` | `MISTRAL_API_KEY` |
-| 6 | Cohere | `command-a-03-2025` | `COHERE_API_KEY` |
-| 7 | Z.ai | `glm-4.7-flash` | `ZAI_API_KEY` |
-| 8 | Cloudflare Workers AI | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
+| 4 | Mistral | `mistral-large-latest` | `MISTRAL_API_KEY` |
+| 5 | Cloudflare Workers AI | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
 
 - Each call goes to the first provider that has a key and isn't cooling down.
 - A rate limit, timeout (30 s), outage, rejected key or unusable reply moves the call to the next provider.
@@ -70,7 +67,7 @@ results are reproducible.
 Requires Python 3.12+, Node 22+, and PostgreSQL 16 (or Docker).
 
 ```bash
-cp .env.example .env               # add keys for any of the 8 providers (at least one)
+cp .env.example .env               # add keys for any of the 5 providers (at least one)
 docker compose up db -d            # or use your own Postgres and set DATABASE_URL
 
 cd backend
@@ -133,6 +130,8 @@ streaming. None of them need an API key.
 
 ## Deploy on Railway
 
+Step-by-step instructions, including where to get each API key, are in [DEPLOY.md](DEPLOY.md).
+
 1. Create a project with a PostgreSQL database and a service from this repo (the `Dockerfile` is picked up via `railway.json`).
 2. On the service, set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`, plus the API keys from `.env.example`.
 3. Deploy. The pre-deploy step seeds the database on first deploy and skips it afterwards.
@@ -153,7 +152,7 @@ backend/
   app/agents/     router, sql_agent, chart, summary
   app/graph.py    LangGraph wiring and the retry loop
   app/sql_guard.py, app/db.py   validation, introspection, read-only execution
-  app/llm.py, app/providers.py  fallback chain across the 8 providers
+  app/llm.py, app/providers.py  fallback chain across the 5 providers
   app/main.py     FastAPI app (also serves the built frontend)
   app/seed.py     sample dataset
   tests/
