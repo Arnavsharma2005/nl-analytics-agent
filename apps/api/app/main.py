@@ -121,7 +121,7 @@ def create_app(graph_factory=get_graph, db_factory=get_db, llm_factory=get_llm) 
         return EventSourceResponse(events())
 
     # In production the built React app is served from the same origin.
-    dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    dist = Path(__file__).resolve().parents[3] / "apps" / "web" / "dist"
     if dist.exists():
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
 

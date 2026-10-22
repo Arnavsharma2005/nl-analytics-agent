@@ -136,5 +136,5 @@ def test_settings_read_the_repo_root_env_file():
 
     from app.config import Settings
 
-    root_env = Path(__file__).resolve().parents[2] / ".env"
+    root_env = Path(__file__).resolve().parents[3] / ".env"
     assert root_env in [Path(p) for p in Settings.model_config["env_file"]]

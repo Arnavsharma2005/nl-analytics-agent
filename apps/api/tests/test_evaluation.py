@@ -27,7 +27,7 @@ def test_gold_questions_run(db):
 
     import yaml
 
-    questions = yaml.safe_load((Path(__file__).resolve().parents[2] / "eval" / "questions.yaml").read_text())
+    questions = yaml.safe_load((Path(__file__).resolve().parents[3] / "eval" / "questions.yaml").read_text())
     assert len(questions) == 30
     for q in questions:
         assert db.run(q["gold_sql"]).rows, f"gold query {q['id']} returned no rows"

@@ -19,7 +19,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT / "apps" / "api"))
 
 from app.config import get_settings  # noqa: E402
 from app.db import Database, QueryError  # noqa: E402
