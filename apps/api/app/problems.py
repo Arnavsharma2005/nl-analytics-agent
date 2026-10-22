@@ -5,6 +5,7 @@ Each error carries a stable `code` that clients can branch on; the codes are lis
 """
 
 import logging
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -19,19 +20,27 @@ DOCS = "https://github.com/Arnavsharma2005/nl-analytics-agent/blob/main/docs/err
 
 
 class Problem(Exception):
-    def __init__(self, status: int, code: str, title: str, detail: str | None = None, **extra):
+    """An error to report to the client. `retry_after` (seconds) is sent as a Retry-After header and in the body."""
+
+    def __init__(self, status: int, code: str, title: str, detail: str | None = None, *,
+                 retry_after: int | None = None, **extra):
         super().__init__(detail or title)
         self.status, self.code, self.title, self.detail, self.extra = status, code, title, detail, extra
+        self.retry_after = retry_after
 
     def body(self) -> dict:
         body = {"type": f"{DOCS}#{self.code.replace('_', '-')}", "code": self.code, "title": self.title,
                 "status": self.status}
         if self.detail:
             body["detail"] = self.detail
+        if self.retry_after is not None:
+            body["retry_after"] = self.retry_after
         return body | self.extra
 
     def response(self) -> JSONResponse:
-        return JSONResponse(self.body(), status_code=self.status, media_type="application/problem+json")
+        headers = {"Retry-After": str(self.retry_after)} if self.retry_after is not None else None
+        return JSONResponse(self.body(), status_code=self.status, media_type="application/problem+json",
+                            headers=headers)
 
 
 def from_exception(exc: Exception) -> Problem:
@@ -39,9 +48,14 @@ def from_exception(exc: Exception) -> Problem:
     message is not shown, since it can carry internal details."""
     if isinstance(exc, Problem):
         return exc
+    if isinstance(exc, AllProvidersFailed) and exc.daily_budget_used:
+        midnight = 86400 - int(datetime.now(UTC).timestamp()) % 86400
+        return Problem(503, "daily_limit_reached", "Today's free model budget is used up",
+                       "Every model provider has used its free calls for today. Saved answers still work; "
+                       "new questions can be asked again after midnight UTC.", retry_after=midnight)
     if isinstance(exc, AllProvidersFailed):
         return Problem(503, "all_providers_failed", "No model provider is available right now", str(exc),
-                       errors=exc.errors)
+                       retry_after=60, errors=exc.errors)
     log.exception("unexpected error while answering", exc_info=exc)
     return Problem(500, "internal_error", "Something went wrong on our side")
 

@@ -9,3 +9,5 @@ langgraph==1.2.16
 langchain-core==1.6.12
 langchain-openai==1.7.2
 PyYAML==6.0.3
+alembic==1.20.1
+httpx==0.28.1

@@ -62,6 +62,7 @@ docker compose up db -d
 # 3. Create the "analytics" database and load the sample data (one time)
 cd apps\api
 python -m app.seed
+alembic upgrade head
 
 # 4. Start the API on http://localhost:8000
 uvicorn app.main:app --reload

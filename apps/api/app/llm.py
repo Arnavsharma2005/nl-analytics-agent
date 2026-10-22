@@ -43,11 +43,19 @@ class Provider:
     api_key: str | None
 
 
+BUDGET_USED = "daily budget used"
+
+
 class AllProvidersFailed(Exception):
     def __init__(self, errors: list[dict]):
         self.errors = errors
         detail = "; ".join(f"{e['provider']}: {e['error']}" for e in errors) or "no provider has an API key configured"
         super().__init__(f"Every model provider failed ({detail})")
+
+    @property
+    def daily_budget_used(self) -> bool:
+        """Every provider was skipped because its daily budget is spent (rather than failing)."""
+        return bool(self.errors) and all(e["error"] == BUDGET_USED for e in self.errors)
 
 
 class BadOutput(Exception):
@@ -106,10 +114,14 @@ def _openai_client(provider: Provider, timeout: float):
 
 
 class FallbackLLM:
+    """`budget`, if given, is asked before every call to a provider (by its name) and returns False once that
+    provider's daily budget is spent; the provider is then skipped like one that is cooling down."""
+
     def __init__(self, providers: list[Provider], timeout: float = 30, client_factory: Callable | None = None,
-                 clock: Callable[[], float] = time.monotonic):
+                 clock: Callable[[], float] = time.monotonic, budget: Callable[[str], bool] | None = None):
         self.providers = providers
         self.timeout = timeout
+        self._budget = budget
         self._factory = client_factory or _openai_client
         self._clients: dict[str, object] = {}
         self._cooldown_until: dict[str, float] = {}
@@ -158,6 +170,10 @@ class FallbackLLM:
         errors = []
         for p in self.available():
             start = time.perf_counter()
+            if self._budget and not self._budget(p.name):
+                errors.append({"provider": p.label, "error": BUDGET_USED})
+                self._log({"provider": p.label, "ok": False, "error": BUDGET_USED, "seconds": 0})
+                continue
             try:
                 reply = self._client(p).invoke([("system", system), ("human", user)])
                 result = parse(_content(reply))

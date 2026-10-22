@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
@@ -56,3 +57,32 @@ def db():
         pytest.skip(f"PostgreSQL not available at {TEST_DB}: {e}")
     seed(TEST_DB)
     return database
+
+
+@pytest.fixture(scope="session")
+def app_engine(db):
+    """The app's own tables, migrated to the latest version in the test database."""
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine
+
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    os.environ["APP_DATABASE_URL"] = TEST_DB
+    try:
+        command.upgrade(Config(str(Path(__file__).resolve().parents[1] / "alembic.ini")), "head")
+    finally:
+        del os.environ["APP_DATABASE_URL"]
+        get_settings.cache_clear()
+    return create_engine(TEST_DB)
+
+
+@pytest.fixture
+def app_tables(app_engine):
+    """Empty app tables for one test."""
+    from sqlalchemy import text
+
+    with app_engine.begin() as conn:
+        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache"))
+    return app_engine

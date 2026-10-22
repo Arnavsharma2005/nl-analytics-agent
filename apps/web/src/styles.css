@@ -93,3 +93,11 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .recharts-default-tooltip { background: var(--surface) !important; border-color: var(--border) !important; border-radius: 8px; }
 .recharts-text { fill: var(--muted); }
 .small { font-size: 0.82rem; margin: 6px 0 0; }
+
+/* Cloudflare's bot check; empty and invisible unless Cloudflare needs a click. */
+.bot-check {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+}

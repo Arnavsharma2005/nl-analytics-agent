@@ -43,17 +43,44 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # --- Usage limits (see SECURITY.md) -----------------------------------------------------------------
+    # Where the app keeps its own tables (usage counters, answer cache), in the "app" schema. Defaults to
+    # DATABASE_URL; set it when DATABASE_URL is the read-only analytics role.
+    app_database_url: str | None = None
+    # Signs the visitor's session cookie. Set a long random value in production; without it a random one is made
+    # at startup, so sessions end on every restart.
+    session_secret: str | None = None
+    session_ttl_s: int = 12 * 3600
+    # Cloudflare Turnstile bot check before a session is issued. Off unless both are set.
+    turnstile_site_key: str | None = None
+    turnstile_secret_key: str | None = None
+    # Header holding the real client IP when behind a proxy, e.g. true-client-ip on Render (which sits behind
+    # Cloudflare). Unset means the connecting address.
+    client_ip_header: str | None = None
+    # Questions per visitor session per hour, and per IP address per day. 0 turns a limit off.
+    quota_session_per_hour: int = 30
+    quota_ip_per_day: int = 300
+    # Model calls per provider per UTC day, e.g. {"groq": 900}. Kept a little under each free tier so the app
+    # can say "today's free limit is used up" instead of failing. Providers not listed are not limited.
+    llm_daily_budget: dict[str, int] = {}
+    # Repeated questions are answered from a cache for this long. 0 turns the cache off.
+    answer_cache_ttl_s: int = 24 * 3600
+
     # Set by Render on every deploy; reported by /healthz so you can tell which build is live.
     git_commit: str | None = Field(default=None, validation_alias=AliasChoices("GIT_COMMIT", "RENDER_GIT_COMMIT"))
 
-    @field_validator("database_url")
+    @field_validator("database_url", "app_database_url")
     @classmethod
-    def use_psycopg_driver(cls, url: str) -> str:
+    def use_psycopg_driver(cls, url: str | None) -> str | None:
         # Railway and most hosts hand out postgres:// or postgresql:// URLs; SQLAlchemy needs the driver named.
         for prefix in ("postgres://", "postgresql://"):
-            if url.startswith(prefix):
+            if url and url.startswith(prefix):
                 return "postgresql+psycopg://" + url[len(prefix):]
         return url
+
+    @property
+    def app_db_url(self) -> str:
+        return self.app_database_url or self.database_url
 
 
 @lru_cache

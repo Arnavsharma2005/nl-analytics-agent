@@ -6,14 +6,17 @@ from app.agents.chart import ChartSpec
 from app.analyst import Analyst
 from app.config import get_settings
 from app.main import create_app
+from app.sessions import Sessions
 
 from .conftest import FakeLLM
 from .test_graph import REVENUE_BY_REGION
 
 
-def client(db):
+def client(db, sessions=None, quota=None):
     analyst = Analyst(FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="t")), db)
-    return TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db))
+    sessions = sessions or Sessions("test-secret", 3600)
+    return TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db,
+                                 sessions_factory=lambda: sessions, quota_factory=lambda: quota))
 
 
 def test_health_schema_examples(db):
@@ -31,7 +34,7 @@ def test_healthz_never_touches_the_database(monkeypatch):
         def no_db():
             raise AssertionError("/healthz must not open a database connection")
 
-        c = TestClient(create_app(analyst_factory=no_db, db_factory=no_db))
+        c = TestClient(create_app(analyst_factory=no_db, db_factory=no_db, sessions_factory=no_db, quota_factory=no_db))
         assert c.get("/healthz").json() == {"status": "ok", "commit": "abc123"}
         r = c.get("/readyz")
         assert r.status_code == 503 and r.json()["code"] == "database_unavailable" and "AssertionError" not in r.text
@@ -63,7 +66,8 @@ def test_unexpected_errors_hide_their_message(db):
             raise RuntimeError("password=hunter2 at db.internal")
             yield
 
-    c = TestClient(create_app(analyst_factory=Broken, db_factory=lambda: db), raise_server_exceptions=False)
+    c = TestClient(create_app(analyst_factory=Broken, db_factory=lambda: db, sessions_factory=lambda: Sessions("s", 60),
+                              quota_factory=lambda: None), raise_server_exceptions=False)
     r = c.post("/api/ask", json={"question": "Revenue by region"})
     assert r.status_code == 500 and r.json()["code"] == "internal_error" and "hunter2" not in r.text
     with c.stream("POST", "/api/ask/stream", json={"question": "Revenue by region"}) as s:
@@ -93,7 +97,8 @@ def test_providers_endpoint_and_all_failed_is_503(db):
     llm = FallbackLLM([Provider("groq", "Groq · m", "https://x", "m", "k"), Provider("mistral", "Mistral · m", "https://x", "m", None)],
                       client_factory=lambda p, t: Down())
     analyst = Analyst(llm, db)
-    c = TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db, llm_factory=lambda: llm))
+    c = TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db, llm_factory=lambda: llm,
+                              sessions_factory=lambda: Sessions("s", 60), quota_factory=lambda: None))
     r = c.post("/api/ask", json={"question": "Revenue by region"})
     assert r.status_code == 503 and r.json()["errors"] == [{"provider": "Groq · m", "error": "rate limited"}]
     assert r.json()["code"] == "all_providers_failed"
