@@ -55,7 +55,8 @@ def main() -> int:
     args = parser.parse_args()
 
     settings = get_settings()
-    db = Database(settings.database_url, settings.statement_timeout_ms, max_rows=10_000)
+    db = Database(settings.database_url, settings.statement_timeout_ms, max_rows=10_000,
+                  max_cost=settings.max_query_cost, personal_columns=settings.personal_data_columns)
     questions = yaml.safe_load(Path(args.questions).read_text())
     if args.ids:
         questions = [q for q in questions if q["id"] in set(args.ids)]

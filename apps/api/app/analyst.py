@@ -99,6 +99,7 @@ class Analyst:
     """Answers business questions over one data source.
 
     Construction introspects the data source's schema once, so build one Analyst per data source and reuse it.
+    Email addresses and phone numbers in results are always masked (see app/privacy.py).
     `ask` and `stream` raise `AllProvidersFailed` when no model provider can classify the question; failures
     later in the pipeline are reported inside the Answer instead.
     """

@@ -13,6 +13,7 @@ from app.agents.sql_agent import write_sql
 from app.agents.summary import summarize
 from app.db import DataSource, QueryError
 from app.llm import LLM, AllProvidersFailed, CallLogging
+from app.privacy import mask_rows
 from app.sql_guard import SQLValidationError, validate_sql
 
 OUT_OF_SCOPE_REPLY = (
@@ -72,6 +73,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     schema = db.schema()
     schema_text = schema.describe()
     table_names = sorted(schema.tables)
+    personal_columns = schema.personal_columns()
 
     def timed(name: str):
         return _timed(name, llm)
@@ -97,7 +99,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     @timed("validate")
     def validate_node(state: AnalyticsState):
         try:
-            sql = validate_sql(state["sql"], set(table_names))
+            sql = validate_sql(state["sql"], set(table_names), personal_columns)
             db.explain(sql)
         except (SQLValidationError, QueryError) as e:
             failure = {"sql": state["sql"], "error": str(e), "stage": "validate"}
@@ -111,7 +113,8 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
         except QueryError as e:
             failure = {"sql": state["sql"], "error": str(e), "stage": "execute"}
             return {"sql_ok": False, "failures": state.get("failures", []) + [failure]}
-        return {"columns": result.columns, "rows": result.rows, "truncated": result.truncated}
+        # Masked here, before the rows reach the chart and summary models, the response or any log.
+        return {"columns": result.columns, "rows": mask_rows(result.rows), "truncated": result.truncated}
 
     @timed("chart_agent")
     def chart_node(state: AnalyticsState):
