@@ -25,6 +25,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agents.chart import choose_chart, column_kinds
 from app.agents.followup import Turn, standalone
+from app.agents.learned_router import LearnedRouter
 from app.agents.projection import read_projection
 from app.agents.router import answer_schema_question, route
 from app.agents.sql_agent import write_sql
@@ -117,11 +118,14 @@ def _series(columns: list[str], rows: list[list[Any]]) -> tuple[str, str]:
 
 def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: int = 50, *, brief: Brief,
                 context: Context | None = None, check_results: bool = False, check_summaries: bool = False,
-                drivers: Drivers | None = None, forecasting: bool = False):
+                drivers: Drivers | None = None, forecasting: bool = False,
+                learned_router: LearnedRouter | None = None):
     schema = db.schema()
     schema_text = schema.describe()
     table_names = sorted(schema.tables)
     personal_columns = schema.personal_columns()
+    intents = (["data_query", "schema_question", "out_of_scope"] + (["why_change"] if drivers is not None else [])
+               + (["forecast"] if forecasting else []))
 
     def timed(name: str):
         return _timed(name, llm)
@@ -133,9 +137,13 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
 
     @timed("router")
     def router_node(state: AnalyticsState):
+        reset = {"failures": [], "sql_attempts": 0}
+        if learned_router and (sure := learned_router.decide(state["question"], intents)):
+            return {"intent": sure.intent, "route_reason": f"The learned router is {sure.probability:.0%} sure.",
+                    **reset}
         decision = route(llm, state["question"], table_names, brief.about, why=drivers is not None,
                          forecast=forecasting)
-        return {"intent": decision.intent, "route_reason": decision.reason, "failures": [], "sql_attempts": 0}
+        return {"intent": decision.intent, "route_reason": decision.reason, **reset}
 
     @timed("schema_answer")
     def schema_node(state: AnalyticsState):
