@@ -86,7 +86,8 @@ def get_analyst() -> Analyst:
                if s.context_retrieval else None)
     drivers = driver_analysis.load() if s.driver_analysis else None
     switches = {"context": bool(context), "fast_path": bool(context) and s.verified_fast_path,
-                "check_results": s.check_results, "check_summaries": s.check_summaries, "drivers": bool(drivers)}
+                "check_results": s.check_results, "check_summaries": s.check_summaries, "drivers": bool(drivers),
+                "forecasting": s.forecasting}
     cache = None
     if s.answer_cache_ttl_s:
         # Answers depend on the build and on which features are on, so either changing starts a fresh cache.
@@ -94,7 +95,7 @@ def get_analyst() -> Analyst:
         cache = AnswerCache(get_app_engine(), version, s.answer_cache_ttl_s)
     return Analyst(get_llm(), db, max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm, cache=cache,
                    context=context, check_results=s.check_results, check_summaries=s.check_summaries,
-                   drivers=drivers)
+                   drivers=drivers, forecasting=s.forecasting)
 
 
 @lru_cache

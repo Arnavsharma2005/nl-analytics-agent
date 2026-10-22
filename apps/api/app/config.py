@@ -93,6 +93,8 @@ class Settings(BaseSettings):
     check_summaries: bool = False
     # Answer "why did it change?" questions by splitting the change by each dimension in semantic/drivers.yml.
     driver_analysis: bool = False
+    # Answer questions about the future ("revenue next quarter?") by forecasting the history the SQL agent queries.
+    forecasting: bool = False
     # Embedding model for finding similar questions, on Cloudflare Workers AI (uses the CLOUDFLARE_* keys). Without
     # those keys, or with this empty, questions are compared by the words they share.
     embedding_model: str | None = "@cf/baai/bge-m3"

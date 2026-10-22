@@ -6,7 +6,8 @@ without them the pipeline starts at the router, exactly as for a single question
 
 With `drivers` (app/analysis/drivers.py), a question about why a metric changed goes from the router to driver
 analysis instead of the SQL agent: the model picks the metric and periods, code splits the change, and the summary
-agent narrates the table.
+agent narrates the table. With `forecasting` (app/analysis/forecast.py), a question about the future is read as the
+history to query and how far ahead to look; the SQL agent writes the history query as usual, and code forecasts it.
 
 With a `Context`, data questions first collect their context (verified examples, values they name); a question
 a verified query answers outright skips the SQL agent. `check_results` sends a query that finds nothing back to the
@@ -15,20 +16,23 @@ SQL agent once, and `check_summaries` has a summary rewritten once if it quotes 
 
 import operator
 import time
+from datetime import date
 from functools import wraps
 from typing import Annotated, Any, TypedDict
 
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
-from app.agents.chart import choose_chart
+from app.agents.chart import choose_chart, column_kinds
 from app.agents.followup import Turn, standalone
+from app.agents.projection import read_projection
 from app.agents.router import answer_schema_question, route
 from app.agents.sql_agent import write_sql
 from app.agents.summary import stream_summary, summarize
 from app.agents.why import Unreadable, read_why
 from app.analysis import drivers as driver_analysis
 from app.analysis.drivers import Drivers
+from app.analysis.forecast import CannotForecast, forecast
 from app.brief import Brief
 from app.checks import EMPTY_RESULT, looks_empty, unsupported_numbers
 from app.context import Context, ContextPack
@@ -68,8 +72,10 @@ class AnalyticsState(TypedDict, total=False):
     chart_source: str
     summary: str
     answer: str
-    analysis: str  # "drivers" when driver analysis answered it
-    reading: str  # how a "why" question was read: the metric and periods compared
+    analysis: str  # "drivers" or "forecast" when one of those answered it
+    reading: str  # for the summary: the comparison driver analysis made, or how the forecast was made
+    sql_question: str  # what the SQL agent is asked, when not the question itself (a forecast's history)
+    horizon: int  # periods to forecast
     error: str
     timings: Annotated[dict[str, float], _add_timings]
     llm_calls: Annotated[list[dict[str, Any]], operator.add]  # which provider served each step, incl. failovers
@@ -94,9 +100,24 @@ def _timed(name: str, llm: LLM | None = None):
     return deco
 
 
+def _series(columns: list[str], rows: list[list[Any]]) -> tuple[str, str]:
+    """The date column and the measure of a single time series."""
+    kinds = column_kinds(columns, rows)
+    when = next((c for c in columns if kinds[c] == "temporal"), None)
+    measure = next((c for c in columns if kinds[c] == "numeric" and not c.endswith("_id")), None)
+    if when is None or measure is None:
+        raise CannotForecast("the history isn't a series of dates with a figure for each")
+    split_by = [c for c in columns if kinds[c] == "categorical" and len({r[columns.index(c)] for r in rows}) > 1]
+    if split_by:
+        raise CannotForecast(f"the history holds several series (by {split_by[0]}), and one is forecast at a time")
+    if any(r[columns.index(measure)] is None for r in rows):
+        raise CannotForecast("the history has periods with no figure")
+    return when, measure
+
+
 def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: int = 50, *, brief: Brief,
                 context: Context | None = None, check_results: bool = False, check_summaries: bool = False,
-                drivers: Drivers | None = None):
+                drivers: Drivers | None = None, forecasting: bool = False):
     schema = db.schema()
     schema_text = schema.describe()
     table_names = sorted(schema.tables)
@@ -112,7 +133,8 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
 
     @timed("router")
     def router_node(state: AnalyticsState):
-        decision = route(llm, state["question"], table_names, brief.about, why=drivers is not None)
+        decision = route(llm, state["question"], table_names, brief.about, why=drivers is not None,
+                         forecast=forecasting)
         return {"intent": decision.intent, "route_reason": decision.reason, "failures": [], "sql_attempts": 0}
 
     @timed("schema_answer")
@@ -124,7 +146,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
 
     @timed("context")
     def context_node(state: AnalyticsState):
-        return {"context": context.pack(state["question"])}
+        return {"context": context.pack(state.get("sql_question") or state["question"])}
 
     def verified_node(state: AnalyticsState):
         query = state["context"].verified
@@ -135,7 +157,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     def write_sql_node(state: AnalyticsState):
         previous = [(f["sql"], f["error"]) for f in state.get("failures", [])]
         pack = state.get("context")
-        draft = write_sql(llm, state["question"], schema_text, previous, brief, db.dialect,
+        draft = write_sql(llm, state.get("sql_question") or state["question"], schema_text, previous, brief, db.dialect,
                           pack.prompt_text() if pack else None)
         return {"sql": draft.sql, "sql_reasoning": draft.reasoning, "sql_attempts": state.get("sql_attempts", 0) + 1,
                 "assumptions": getattr(draft, "assumptions", []), "verified_question": None}
@@ -239,14 +261,50 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
                 "chart": {"type": "bar", "x": "driver", "y": [measure], "series": None,
                           "title": f"What drove the change in {metric.label.lower()}"}}
 
+    @timed("projection")
+    def projection_node(state: AnalyticsState):
+        reading = read_projection(llm, state["question"])
+        return {"intent": "data_query", "analysis": "forecast", "sql_question": reading.history_question,
+                "horizon": reading.periods_ahead}
+
+    @timed("forecast")
+    def forecast_node(state: AnalyticsState):
+        columns, rows = state["columns"], state["rows"]
+        try:
+            when, measure = _series(columns, rows)
+            i, j = columns.index(when), columns.index(measure)
+            dates = [date.fromisoformat(str(r[i])[:10]) for r in rows]
+            if dates != sorted(dates) or len(set(dates)) != len(dates):
+                order = sorted(range(len(rows)), key=lambda k: dates[k])
+                rows, dates = [rows[k] for k in order], sorted(dates)
+            values = [float(r[j]) for r in rows]
+            result = forecast(dates, values, state.get("horizon") or 3)
+        except CannotForecast as e:
+            return {"reading": f"No forecast was made: {e}. Say so, then describe the history."}
+        last = len(rows) - 1
+        history = [[d.isoformat(), v, v if k == last else None, v if k == last else None, v if k == last else None]
+                   for k, (d, v) in enumerate(zip(dates, values, strict=True))]
+        future = [[d.isoformat(), None, round(f, 2), round(lo, 2), round(hi, 2)]
+                  for d, f, lo, hi in zip(result.dates, result.values, result.lower, result.upper, strict=True)]
+        backtest = (f"over the last {result.backtest_points} {result.frequency}s of history it was off by "
+                    f"{result.backtest_mape}% on average" if result.backtest_mape is not None
+                    else "its backtest error can't be given as a percentage because the history has zeros")
+        note = (f"Forecast of {measure} for the next {len(future)} {result.frequency}s with a {result.model} "
+                f"model; the range is an 80% interval; {backtest}.")
+        return {"columns": [when, measure, "forecast", "lower", "upper"], "rows": history + future,
+                "truncated": False, "reading": note, "sql_reasoning": f"{state.get('sql_reasoning', '')} {note}".strip(),
+                "chart_source": "fallback",
+                "chart": {"type": "line", "x": when, "y": [measure, "forecast"], "series": None,
+                          "band": ["lower", "upper"], "title": f"{measure.replace('_', ' ').capitalize()} forecast"}}
+
     def give_up_node(state: AnalyticsState):
         last = state["failures"][-1]["error"] if state.get("failures") else "unknown error"
         return {"error": f"I couldn't build a working query after {max_attempts} attempts. Last error: {last}"}
 
     def after_router(state: AnalyticsState):
         first = "context" if context else "sql_agent"
-        return {"data_query": first, "why_change": "drivers", "schema_question": "schema_answer"}.get(
-            state["intent"], "out_of_scope")
+        return {"data_query": first, "why_change": "drivers", "forecast": "projection",
+                "schema_question": "schema_answer"}.get(state["intent"], "out_of_scope")
 
     def after_context(state: AnalyticsState):
         return "verified" if state["context"].verified else "sql_agent"
@@ -254,7 +312,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     def after_check(next_node: str):
         def decide(state: AnalyticsState):
             if state.get("sql_ok"):
-                return next_node
+                return "forecast" if next_node == "chart_agent" and state.get("analysis") == "forecast" else next_node
             return "sql_agent" if len(state.get("failures", [])) < max_attempts else "give_up"
 
         return decide
@@ -271,7 +329,14 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     g.add_node("summary_agent", summary_node)
     g.add_node("give_up", give_up_node)
 
-    why = ["drivers"] if drivers else []
+    why = (["drivers"] if drivers else []) + (["projection"] if forecasting else [])
+    after_execute = ["chart_agent", "sql_agent", "give_up"] + (["forecast"] if forecasting else [])
+    if forecasting:
+        g.add_node("projection", projection_node)
+        g.add_node("forecast", forecast_node)
+        g.add_edge("projection", "context" if context else "sql_agent")
+        g.add_conditional_edges("forecast", lambda state: "summary_agent" if state.get("chart") else "chart_agent",
+                                ["summary_agent", "chart_agent"])
     if drivers:
         g.add_node("drivers", drivers_node)
         g.add_conditional_edges("drivers", lambda state: END if state.get("error") else "summary_agent",
@@ -289,7 +354,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
         g.add_conditional_edges("router", after_router, ["sql_agent", "schema_answer", "out_of_scope", *why])
     g.add_edge("sql_agent", "validate")
     g.add_conditional_edges("validate", after_check("execute"), ["execute", "sql_agent", "give_up"])
-    g.add_conditional_edges("execute", after_check("chart_agent"), ["chart_agent", "sql_agent", "give_up"])
+    g.add_conditional_edges("execute", after_check("chart_agent"), after_execute)
     g.add_edge("chart_agent", "summary_agent")
     g.add_edge("summary_agent", END)
     g.add_edge("schema_answer", END)

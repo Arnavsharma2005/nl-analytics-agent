@@ -32,6 +32,8 @@ STEP_LABELS = {
     "chart_agent": "Choosing a chart",
     "summary_agent": "Writing the insight",
     "drivers": "Finding what drove the change",
+    "projection": "Working out what to forecast",
+    "forecast": "Forecasting",
     "schema_answer": "Describing the data",
     "out_of_scope": "Done",
     "give_up": "Stopped",
@@ -81,9 +83,11 @@ class Answer(BaseModel):
         default=None, description="Whether every figure in the summary was found in the result (None: not checked).")
     standalone_question: str | None = Field(
         default=None, description="A follow-up question as it was understood with the earlier ones in its conversation.")
-    analysis: Literal["drivers"] | None = Field(
+    analysis: Literal["drivers", "forecast"] | None = Field(
         default=None, description="drivers: a question about why a metric changed, answered by splitting the change "
-                                  "by each dimension in code (the rows are the drivers, biggest first).")
+                                  "by each dimension in code (the rows are the drivers, biggest first). forecast: "
+                                  "the history the SQL returned and, after it, the periods forecast in code with "
+                                  "their 80% range (lower, upper).")
 
     def as_turn(self) -> Turn:
         """This answer as an earlier turn of its conversation, for reading the questions after it."""
@@ -179,15 +183,17 @@ class Analyst:
     added to it. With a `context` (app.context), the SQL agent sees verified examples and the values a question
     names, and a verified query can answer a question outright. `check_results` and `check_summaries` turn on
     the checks in app.checks. With `drivers` (app.analysis.drivers), questions about why a metric changed are
-    answered by driver analysis. Each of these is off unless given.
+    answered by driver analysis, and with `forecasting` questions about the future are forecast from their
+    history. Each of these is off unless given.
     """
 
     def __init__(self, llm: LLM, source: DataSource, *, brief: Brief | None = None, max_attempts: int = 3,
                  rows_for_llm: int = 50, cache: Cache | None = None, context: Context | None = None,
-                 check_results: bool = False, check_summaries: bool = False, drivers: Drivers | None = None):
+                 check_results: bool = False, check_summaries: bool = False, drivers: Drivers | None = None,
+                 forecasting: bool = False):
         self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm,
                                   brief=brief or database(), context=context, check_results=check_results,
-                                  check_summaries=check_summaries, drivers=drivers)
+                                  check_summaries=check_summaries, drivers=drivers, forecasting=forecasting)
         self._cache = cache
 
     def ask(self, question: str, history: list[Turn] | None = None) -> Answer:
@@ -235,9 +241,9 @@ class Analyst:
             if mode == "updates":
                 for node, update in chunk.items():
                     yield Step(node, STEP_LABELS.get(node, node))
-                    if node in ("execute", "drivers") and update and "rows" in update:
+                    if node in ("execute", "drivers", "forecast") and update and "rows" in update:
                         yield Table(update["columns"], update["rows"], update["truncated"])
-                    if node in ("chart_agent", "drivers") and update and "chart" in update:
+                    if node in ("chart_agent", "drivers", "forecast") and update and "chart" in update:
                         yield Chart(ChartSpec.model_validate(update["chart"]))
             elif mode == "custom":
                 if "token" in chunk:

@@ -23,7 +23,7 @@ export function message(id: string, conversation: string, question = "Revenue by
       columns: ["region", "revenue"],
       rows: ROWS,
       truncated: false,
-      chart: { type: "bar", x: "region", y: ["revenue"], series: null, title: "Revenue by region" },
+      chart: { type: "bar", x: "region", y: ["revenue"], series: null, band: null, title: "Revenue by region" },
       chart_source: "llm",
       summary: "North led with ₹1.23 Cr, well ahead of South at ₹45.3 L.",
       error: null,

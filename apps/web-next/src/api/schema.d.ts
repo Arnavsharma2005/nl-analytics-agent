@@ -637,9 +637,9 @@ export interface components {
         Answer: {
             /**
              * Analysis
-             * @description drivers: a question about why a metric changed, answered by splitting the change by each dimension in code (the rows are the drivers, biggest first).
+             * @description drivers: a question about why a metric changed, answered by splitting the change by each dimension in code (the rows are the drivers, biggest first). forecast: the history the SQL returned and, after it, the periods forecast in code with their 80% range (lower, upper).
              */
-            analysis: "drivers" | null;
+            analysis: ("drivers" | "forecast") | null;
             /**
              * Answer
              * @description Plain-text reply for schema and out-of-scope questions.
@@ -776,8 +776,16 @@ export interface components {
             /** Summary */
             summary: string | null;
         };
-        /** ChartSpec */
+        /**
+         * ChartSpec
+         * @description A chart as answers carry it: the agent's choice, or one drawn up in code, which may add a band.
+         */
         ChartSpec: {
+            /**
+             * Band
+             * @description Two columns, lower and upper, shaded as a range on a line chart (a forecast's interval). With a band, y columns after the first are drawn dashed as projections.
+             */
+            band: string[] | null;
             /**
              * Series
              * @description Optional categorical column that splits lines/bars.
