@@ -123,6 +123,8 @@ class Settings(BaseSettings):
     public_url: str | None = None
     # How long a sign-in lasts.
     user_session_days: int = 30
+    # An MCP server at /mcp for Claude Desktop and other agents (app/api_mcp.py), limited per IP address.
+    mcp: bool = False
     # GitHub logins (lowercase or not) that may use the Curator, as a JSON list: ["arnavsharma2005"].
     curators: list[str] = []
     # Lets the Curator open a pull request adding approved answers to semantic/queries.yml: a fine-grained token

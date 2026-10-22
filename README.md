@@ -171,6 +171,20 @@ app. The full schema is at `/docs` while the app runs.
 | `POST` | `/v1/session` | Same as `/api/session` |
 | `GET` | `/v1/config` | Turnstile site key, starter questions and which features are on |
 
+### MCP: ask from Claude Desktop, Cursor or another agent
+
+With `MCP=true` the API also serves an [MCP](https://modelcontextprotocol.io) server at `/mcp` (Streamable HTTP,
+stateless). Its tools are `ask` (a question in plain English → the answer, its SQL and up to 50 rows),
+`list_tables`, `list_verified_questions` and `run_verified_query` (a reviewed query, run as written with no model).
+It is the same analyst behind the same SQL guard, and every question counts against the per-IP daily limit.
+
+In Claude Desktop, add it under Settings → Connectors → Add custom connector with the URL
+`https://<your-api>/mcp`. Clients that only launch local servers can bridge to it:
+
+```json
+{ "mcpServers": { "sales-analyst": { "command": "npx", "args": ["-y", "mcp-remote", "https://<your-api>/mcp"] } } }
+```
+
 ## Business rules and verified queries
 
 What the words in a question mean here lives in `apps/api/semantic/`, not in code, so it can be reviewed like
