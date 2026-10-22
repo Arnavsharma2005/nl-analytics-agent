@@ -144,6 +144,11 @@ app. The full schema is at `/docs` while the app runs.
 | `POST` | `/v1/messages/{id}/feedback` | `{"rating": "up" \| "down", "category": "wrong_data" \| "misunderstood" \| "wrong_chart" \| "lost_context" \| "other", "comment": "..."}` |
 | `POST` | `/v1/messages/{id}/explain` | The answer's SQL as plain-English steps (one model call, then kept) |
 | `POST` | `/v1/transcribe` | Multipart `audio` (webm, ogg, mp4, mpeg, wav or m4a, up to 2 MB) → `{"text": "..."}`, with Whisper on Groq; the key stays on the server |
+| `GET` | `/v1/conversations` | Your recent conversations (signed in: from every device, kept 90 days; otherwise this session's) |
+| `GET` | `/v1/conversations/{id}/messages` | The answered messages of one of your conversations, to pick it up again |
+| `GET` | `/v1/auth/github?next=/` | Sign in with GitHub (optional): redirects to GitHub and back. Raises the question limits and keeps history |
+| `POST` | `/v1/auth/logout` | Sign out |
+| `GET` | `/v1/me` | Who is signed in: `{"user": {"login", "name", "avatar_url"}}` or `{"user": null}` |
 | `POST` | `/v1/session` | Same as `/api/session` |
 | `GET` | `/v1/config` | Turnstile site key, starter questions and which features are on |
 
@@ -240,7 +245,9 @@ The public demo runs on free model quotas, so it protects them:
 
 - **Bot check.** With `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` set, a visitor passes a Cloudflare Turnstile
   check (usually invisible) before getting a session, and asking needs a session.
-- **Quotas.** 30 questions per session per hour and 300 per IP address per day by default.
+- **Quotas.** 30 questions per session per hour and 300 per IP address per day by default. Visitors who sign in
+  with GitHub (optional) get 60 an hour and 500 a day instead, with no per-IP limit, so a shared campus or office
+  address doesn't lock everyone out.
 - **Model budgets.** `LLM_DAILY_BUDGET` caps calls per provider per day, a little under each free tier, so the app
   shows "today's free limit is used up" instead of failing at random.
 - **Answer cache.** A repeat of a recent question is answered from the cache without any model calls, for 24 hours

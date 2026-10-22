@@ -53,23 +53,33 @@ class Counters:
 
 @dataclass(frozen=True)
 class Visitor:
-    """Who is asking: the signed session from the cookie, if any, and the client IP address."""
+    """Who is asking: the signed session from the cookie, if any, the client IP address, and the signed-in user."""
 
     session: str | None
     ip: str
+    user: int | None = None
+
+    @property
+    def owner(self) -> str | None:
+        """Whose messages these are: the user's when signed in, else the session's."""
+        return f"user:{self.user}" if self.user else self.session
 
 
 class Quota:
-    """Questions allowed per visitor session per hour and per IP address per day (0 turns a limit off)."""
+    """Questions allowed per visitor session per hour and per IP address per day; a signed-in user instead has their
+    own limits per hour and per day, and no IP limit (a campus or office shares one address). 0 turns a limit off."""
 
-    def __init__(self, counters: Counters, per_session_hour: int, per_ip_day: int):
+    def __init__(self, counters: Counters, per_session_hour: int, per_ip_day: int, per_user_hour: int = 0,
+                 per_user_day: int = 0):
         self._counters = counters
-        self._rules = [("session", HOUR, per_session_hour), ("ip", DAY, per_ip_day)]
+        self._anonymous = [("session", HOUR, per_session_hour), ("ip", DAY, per_ip_day)]
+        self._signed_in = [("user", HOUR, per_user_hour), ("user-day", DAY, per_user_day)]
 
     def spend(self, visitor: Visitor) -> Spend | None:
         """Count one question. Returns the exhausted window when a limit is reached, else None."""
-        for kind, window, limit in self._rules:
-            who = visitor.session if kind == "session" else visitor.ip
+        who_by_kind = {"session": visitor.session, "ip": visitor.ip, "user": visitor.user, "user-day": visitor.user}
+        for kind, window, limit in self._signed_in if visitor.user else self._anonymous:
+            who = who_by_kind[kind]
             if not limit or not who:
                 continue
             try:

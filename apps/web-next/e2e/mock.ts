@@ -1,6 +1,6 @@
 /** A fake API for the browser tests: answers /v1 and /healthz from fixtures, and records what the page sent. */
 import type { Page, Route } from "@playwright/test";
-import type { Message, StreamEvents } from "../src/api/types";
+import type { ConversationSummary, Message, StreamEvents, User } from "../src/api/types";
 
 export const STARTERS = ["Revenue by region", "Monthly revenue trend in 2025", "Top 5 products by revenue"];
 
@@ -66,6 +66,10 @@ export interface Api {
   /** Replace how a question is answered: return the response body, or a problem for an error. */
   answer: (key: string, conversation: string, question: string, attempt: number) => { status?: number; body: string; headers?: Record<string, string> };
   healthDelayMs: number;
+  /** Who is signed in (null: nobody), and their earlier conversations with the messages in each. */
+  user: User | null;
+  history: { conversation: ConversationSummary; messages: Message[] }[];
+  signedOut: boolean;
 }
 
 export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise<Api> {
@@ -74,6 +78,9 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     feedback: [],
     answer: (key, conversation, question) => ({ body: sse(answerEvents(message(key, conversation, question))) }),
     healthDelayMs: 0,
+    user: null,
+    history: [],
+    signedOut: false,
     ...overrides,
   };
   const json = (route: Route, body: unknown, status = 200) =>
@@ -84,11 +91,22 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     await json(route, { status: "ok" }).catch(() => {});
   });
   await page.route("**/v1/config", (route) =>
-    json(route, { turnstile_site_key: null, starters: STARTERS, features: { voice: false, explain: true, feedback: true } }));
+    json(route, { turnstile_site_key: null, starters: STARTERS, features: { voice: false, explain: true, feedback: true, sign_in: true } }));
+  await page.route("**/v1/me", (route) => json(route, { user: api.user }));
+  await page.route("**/v1/auth/logout", (route) => {
+    api.user = null;
+    api.signedOut = true;
+    return route.fulfill({ status: 204 });
+  });
+  await page.route("**/v1/conversations", (route) => json(route, api.user ? api.history.map((h) => h.conversation) : []));
   await page.route("**/v1/session", (route) => json(route, { ok: true }));
   const attempts = new Map<string, number>();
   await page.route("**/v1/conversations/*/messages", (route) => {
     const req = route.request();
+    if (req.method() === "GET") {
+      const id = new URL(req.url()).pathname.split("/")[3];
+      return json(route, api.history.find((h) => h.conversation.id === id)?.messages ?? []);
+    }
     const key = req.headers()["idempotency-key"] ?? null;
     const { question } = req.postDataJSON();
     const conversation = new URL(req.url()).pathname.split("/")[3];

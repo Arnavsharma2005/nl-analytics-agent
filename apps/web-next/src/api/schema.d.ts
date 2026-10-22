@@ -193,6 +193,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sign In
+         * @description Start signing in with GitHub: redirects there, and GitHub sends the visitor back to the callback.
+         */
+        get: operations["sign_in_v1_auth_github_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign Out */
+        post: operations["sign_out_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/config": {
         parameters: {
             query?: never;
@@ -213,6 +250,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Conversations
+         * @description Your recent conversations, most recent first: when signed in, from every device and kept for longer;
+         *     otherwise this session's.
+         */
+        get: operations["conversations_v1_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/conversations/{conversation_id}/messages": {
         parameters: {
             query?: never;
@@ -220,7 +278,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Conversation
+         * @description The answered messages of one of your conversations, oldest first, to pick it up again.
+         */
+        get: operations["conversation_v1_conversations__conversation_id__messages_get"];
         put?: never;
         /**
          * Ask
@@ -230,6 +292,26 @@ export interface paths {
          *     Otherwise the response is the finished message as JSON.
          */
         post: operations["ask_v1_conversations__conversation_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description Who is signed in, if anyone.
+         */
+        get: operations["me_v1_me_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -472,6 +554,29 @@ export interface components {
             /** Turnstile Site Key */
             turnstile_site_key: string | null;
         };
+        /**
+         * ConversationV1
+         * @description A conversation in someone's history.
+         */
+        ConversationV1: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Messages */
+            messages: number;
+            /**
+             * Title
+             * @description Its first question.
+             */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** ExplanationV1 */
         ExplanationV1: {
             /** Steps */
@@ -508,6 +613,10 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** MeV1 */
+        MeV1: {
+            user: components["schemas"]["UserV1"] | null;
         };
         /**
          * MessageV1
@@ -547,6 +656,15 @@ export interface components {
         TranscriptV1: {
             /** Text */
             text: string;
+        };
+        /** UserV1 */
+        UserV1: {
+            /** Avatar Url */
+            avatar_url: string | null;
+            /** Login */
+            login: string;
+            /** Name */
+            name: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -809,6 +927,53 @@ export interface operations {
             };
         };
     };
+    sign_in_v1_auth_github_get: {
+        parameters: {
+            query?: {
+                next?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_out_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     config_v1_config_get: {
         parameters: {
             query?: never;
@@ -825,6 +990,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigV1"];
+                };
+            };
+        };
+    };
+    conversations_v1_conversations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationV1"][];
+                };
+            };
+        };
+    };
+    conversation_v1_conversations__conversation_id__messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageV1"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -863,6 +1079,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_v1_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeV1"];
                 };
             };
         };

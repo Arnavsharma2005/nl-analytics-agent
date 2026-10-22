@@ -165,3 +165,77 @@ test("on a phone the page fits the screen and the details open as a sheet @mobil
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
 });
+
+const ARNAV = { login: "arnav", name: "Arnav", avatar_url: null };
+
+test("signing in is offered, and goes to GitHub and back to this page", async ({ page }) => {
+  await mockApi(page);
+  let started = "";
+  await page.route("**/v1/auth/github**", (route) => {
+    started = route.request().url();
+    return route.fulfill({ status: 200, contentType: "text/html", body: "<p>GitHub</p>" });
+  });
+  await page.goto("/");
+  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await expect(page.getByText("GitHub", { exact: true })).toBeVisible();
+  expect(new URL(started).searchParams.get("next")).toBe("/");
+});
+
+test("an earlier conversation can be opened from the history and carried on", async ({ page }) => {
+  const conversation = "6f1c2b7e-1d1a-4a51-9a39-3a4f7b2c9d10";
+  const first = message("0b3e3a8e-5c1d-4d5e-8f7a-1b2c3d4e5f60", conversation, "Revenue by region");
+  const api = await mockApi(page, {
+    user: ARNAV,
+    history: [{ conversation: { id: conversation, title: "Revenue by region", messages: 1, updated_at: new Date().toISOString() }, messages: [first] }],
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "History" }).click();
+  const dialog = page.getByRole("dialog", { name: "Your conversations" });
+  await expect(dialog.getByText("Signed in as arnav")).toBeVisible();
+  await dialog.getByRole("button", { name: /Revenue by region/ }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("heading", { level: 2, name: "Revenue by region" })).toBeVisible();
+  await expect(page.locator(".figure").first()).toHaveText("₹1.23 Cr");
+
+  const box = page.getByRole("textbox", { name: "Your question" });
+  await box.fill("and in 2024?");
+  await box.press("Enter");
+  await expect(page.getByRole("heading", { level: 2, name: "and in 2024?" })).toBeVisible();
+  expect(api.asked.at(-1)!.conversation).toBe(conversation); // the follow-up is asked in the opened conversation
+});
+
+test("signing out from the history", async ({ page }) => {
+  const api = await mockApi(page, { user: ARNAV });
+  await page.goto("/");
+  await page.getByRole("button", { name: "History" }).click();
+  await expect(page.getByText("Nothing yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("link", { name: "Sign in with GitHub" })).toBeVisible();
+  expect(api.signedOut).toBe(true);
+});
+
+test("a sign-in that did not finish is explained", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/?signin=failed");
+  await expect(page.getByRole("alert")).toContainText("Signing in with GitHub didn't finish");
+  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("the history has no accessibility violations and fits a phone @mobile", async ({ page }) => {
+  const conversation = "6f1c2b7e-1d1a-4a51-9a39-3a4f7b2c9d10";
+  await mockApi(page, {
+    user: ARNAV,
+    history: [{
+      conversation: { id: conversation, title: "Which region grew revenue the fastest from 2024 to 2025, in percent?", messages: 3, updated_at: new Date(Date.now() - 3 * 86_400_000).toISOString() },
+      messages: [],
+    }],
+  });
+  await askStarter(page);
+  await page.getByRole("button", { name: "History" }).click();
+  await expect(page.getByText("3 days ago, 3 questions")).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBe(0);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});

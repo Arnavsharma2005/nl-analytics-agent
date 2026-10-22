@@ -8,6 +8,9 @@ export type Config = Schemas["ConfigV1"];
 export type Message = Schemas["MessageV1"];
 export type Feedback = Schemas["FeedbackV1"];
 export type Explanation = Schemas["ExplanationV1"];
+export type Me = Schemas["MeV1"];
+export type User = Schemas["UserV1"];
+export type ConversationSummary = Schemas["ConversationV1"];
 export type Cell = string | number | boolean | null;
 
 /** The data of each server-sent event on POST /v1/conversations/{id}/messages. */

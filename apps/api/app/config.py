@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # Questions per visitor session per hour, and per IP address per day. 0 turns a limit off.
     quota_session_per_hour: int = 30
     quota_ip_per_day: int = 300
+    # Questions per signed-in user per hour and per day (they have no IP limit). 0 turns a limit off.
+    quota_user_per_hour: int = 60
+    quota_user_per_day: int = 500
     # Model calls per provider per UTC day, e.g. {"groq": 900}. Kept a little under each free tier so the app
     # can say "today's free limit is used up" instead of failing. Providers not listed are not limited.
     llm_daily_budget: dict[str, int] = {}
@@ -92,8 +95,20 @@ class Settings(BaseSettings):
     embedding_model: str | None = "@cf/baai/bge-m3"
 
     # --- /v1 ------------------------------------------------------------------------------------------------
-    # Questions and answers asked through /v1 are kept this long, for retries, ratings and explanations.
+    # Questions and answers asked through /v1 are kept this long, for retries, ratings and explanations; a
+    # signed-in user's for longer, as their history.
     message_retention_days: int = 7
+    user_message_retention_days: int = 90
+
+    # --- Sign-in with GitHub (optional). Off unless both are set. Create an OAuth app at
+    # https://github.com/settings/developers with the callback URL <PUBLIC_URL>/v1/auth/github/callback. ----------
+    github_client_id: str | None = None
+    github_client_secret: str | None = None
+    # Where visitors reach the web app, e.g. https://nl-analytics-agent.pages.dev. The sign-in callback and the
+    # page visitors return to are on this origin. Unset means the origin the API was called on (local development).
+    public_url: str | None = None
+    # How long a sign-in lasts.
+    user_session_days: int = 30
     # Speech to text for voice questions, with Whisper on Groq (needs GROQ_API_KEY). Empty turns voice off.
     transcribe_model: str | None = "whisper-large-v3-turbo"
 
