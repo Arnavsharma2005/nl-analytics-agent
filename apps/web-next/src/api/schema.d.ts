@@ -324,6 +324,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/datasets/sheets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Sheet
+         * @description Import a Google Sheet shared by link, as if its tab were an uploaded CSV file (same limits, kept for a
+         *     day). Only Google's own hosts are contacted.
+         */
+        post: operations["import_sheet_v1_datasets_sheets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/datasets/{dataset_id}": {
         parameters: {
             query?: never;
@@ -337,6 +358,26 @@ export interface paths {
         post?: never;
         /** Delete Dataset */
         delete: operations["delete_dataset_v1_datasets__dataset_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/datasets/{dataset_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh
+         * @description Import an imported sheet again, keeping the dataset's id (and its conversations) and another day.
+         */
+        post: operations["refresh_v1_datasets__dataset_id__refresh_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -763,6 +804,11 @@ export interface components {
             name: string;
             /** Rows */
             rows: number;
+            /**
+             * Source
+             * @description The Google Sheets link it was imported from, if any; POST /v1/datasets/{id}/refresh imports it again.
+             */
+            source: string | null;
             /** Suggestions */
             suggestions: string[];
             /** Table */
@@ -876,6 +922,14 @@ export interface components {
             id: string;
             /** Question */
             question: string;
+        };
+        /** SheetV1 */
+        SheetV1: {
+            /**
+             * Url
+             * @description A Google Sheets link, shared with "Anyone with the link". A #gid=... part picks the tab; otherwise the first tab.
+             */
+            url: string;
         };
         /** TranscriptV1 */
         TranscriptV1: {
@@ -1361,6 +1415,39 @@ export interface operations {
             };
         };
     };
+    import_sheet_v1_datasets_sheets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SheetV1"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_dataset_v1_datasets__dataset_id__get: {
         parameters: {
             query?: never;
@@ -1409,6 +1496,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_v1_datasets__dataset_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetV1"];
+                };
             };
             /** @description Validation Error */
             422: {

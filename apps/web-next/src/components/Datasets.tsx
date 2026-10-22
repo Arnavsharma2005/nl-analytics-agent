@@ -1,7 +1,8 @@
-/** Asking about your own CSV file: uploading it, what was found in it, and the files you uploaded earlier. */
+/** Asking about your own data: uploading a CSV file or importing a Google Sheet, what was found in it, and the files
+ * you added earlier. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useId } from "react";
-import { deleteDataset, listDatasets, uploadDataset } from "../api/datasets";
+import { useId, useState } from "react";
+import { deleteDataset, importSheet, listDatasets, refreshDataset, uploadDataset } from "../api/datasets";
 import { ApiError } from "../api/http";
 import type { Dataset, DatasetColumn } from "../api/types";
 import { cn } from "../lib/cn";
@@ -74,6 +75,70 @@ export function UploadButton({ maxMb, onUploaded }: { maxMb: number; onUploaded:
   );
 }
 
+const SHEET_LINK = /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[\w-]{20,}/;
+
+/** Import a Google Sheet by pasting its link. The sheet must be shared with "Anyone with the link". */
+export function SheetImport({ onImported }: { onImported: (d: Dataset) => void }) {
+  const id = useId();
+  const [url, setUrl] = useState("");
+  const queryClient = useQueryClient();
+  const imported = useMutation({
+    mutationFn: async (link: string) => {
+      if (!SHEET_LINK.test(link)) {
+        throw new ApiError({
+          code: "not_a_sheet", title: "This isn't a Google Sheets link", status: 422,
+          detail: "Paste the link from the address bar of the sheet, starting with https://docs.google.com/spreadsheets/d/.",
+        });
+      }
+      return importSheet(link);
+    },
+    onSuccess: (dataset) => {
+      setUrl("");
+      void queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      onImported(dataset);
+    },
+  });
+
+  return (
+    <form
+      className="mt-6"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (url.trim()) imported.mutate(url.trim());
+      }}
+    >
+      <label htmlFor={id} className="text-sm font-medium text-ink">Or paste a link to a Google Sheet</label>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <input
+          id={id}
+          type="url"
+          inputMode="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://docs.google.com/spreadsheets/d/…"
+          aria-describedby={`${id}-hint`}
+          className="min-w-0 flex-1 basis-64 rounded-md border border-rule bg-surface px-3 py-1.5 text-sm text-text placeholder:text-muted focus-visible:border-ink"
+        />
+        <button
+          type="submit"
+          disabled={imported.isPending || !url.trim()}
+          className="rounded-md border border-ink px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink hover:text-surface disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-ink"
+        >
+          {imported.isPending ? "Importing…" : "Import the sheet"}
+        </button>
+      </div>
+      <p id={`${id}-hint`} className="mt-2 text-sm text-muted">
+        Share it with &ldquo;Anyone with the link&rdquo; first. The tab open in the link is the one imported, and you can refresh it later.
+      </p>
+      {imported.isError && (
+        <div className="mt-3">
+          <ErrorNotice error={imported.error as ApiError} />
+        </div>
+      )}
+    </form>
+  );
+}
+
 function values(c: DatasetColumn): string {
   if (c.personal) return `Hidden from answers: ${c.personal}`;
   if (c.low != null && c.high != null) return c.low === c.high ? String(c.low) : `${c.low} to ${c.high}`;
@@ -81,8 +146,44 @@ function values(c: DatasetColumn): string {
   return "";
 }
 
-/** Which uploaded file the questions are about, its columns, and the way back to the demo data. */
-export function DatasetBar({ dataset, onLeave }: { dataset: Dataset | "gone"; onLeave: () => void }) {
+/** Import an imported sheet again; questions asked next are about what it holds now. */
+function RefreshButton({ dataset, onRefreshed }: { dataset: Dataset; onRefreshed: (d: Dataset) => void }) {
+  const queryClient = useQueryClient();
+  const refresh = useMutation({
+    mutationFn: () => refreshDataset(dataset.id),
+    onSuccess: (fresh) => {
+      void queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      onRefreshed(fresh);
+    },
+  });
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => refresh.mutate()}
+        disabled={refresh.isPending}
+        className="shrink-0 text-sm text-muted underline underline-offset-4 hover:text-ink disabled:cursor-wait"
+      >
+        {refresh.isPending ? "Refreshing…" : "Refresh from the sheet"}
+      </button>
+      <p role="status" className="sr-only">{refresh.isSuccess ? `Refreshed: ${count(refresh.data.rows, "row")}` : ""}</p>
+      {refresh.isError && (
+        <div className="basis-full">
+          <ErrorNotice error={refresh.error as ApiError} />
+        </div>
+      )}
+    </>
+  );
+}
+
+interface DatasetBarProps {
+  dataset: Dataset | "gone";
+  onLeave: () => void;
+  onRefreshed: (d: Dataset) => void;
+}
+
+/** Which uploaded file or sheet the questions are about, its columns, and the way back to the demo data. */
+export function DatasetBar({ dataset, onLeave, onRefreshed }: DatasetBarProps) {
   if (dataset === "gone") {
     return (
       <section aria-label="Uploaded file" className="mb-4 rounded-md border-l-4 border-turmeric bg-surface px-4 py-3">
@@ -105,12 +206,24 @@ export function DatasetBar({ dataset, onLeave }: { dataset: Dataset | "gone"; on
             {hidden > 0 && `, ${hidden} kept private`}
           </span>
         </p>
-        <button type="button" onClick={onLeave} className="shrink-0 text-sm text-muted underline underline-offset-4 hover:text-ink">
-          Back to the sales demo
-        </button>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {dataset.source && <RefreshButton key={dataset.id} dataset={dataset} onRefreshed={onRefreshed} />}
+          <button type="button" onClick={onLeave} className="shrink-0 text-sm text-muted underline underline-offset-4 hover:text-ink">
+            Back to the sales demo
+          </button>
+        </div>
       </div>
       <details className="mt-2 text-sm">
         <summary className="cursor-pointer text-muted hover:text-ink">See the columns (deleted {until(dataset.expires_at)})</summary>
+        {dataset.source && (
+          <p className="mt-2 text-muted">
+            Imported from{" "}
+            <a href={dataset.source} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-4">
+              this Google Sheet
+            </a>
+            . Refresh to ask about what it holds now.
+          </p>
+        )}
         <div className="mt-2 overflow-x-auto">
           <table className="w-full text-left">
             <thead className="text-muted">

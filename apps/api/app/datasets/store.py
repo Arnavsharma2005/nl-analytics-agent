@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -27,6 +27,8 @@ class DatasetV1(BaseModel):
     rows: int
     columns: list[ColumnV1]
     suggestions: list[str]
+    source: str | None = Field(default=None, description="The Google Sheets link it was imported from, if any; "
+                                                         "POST /v1/datasets/{id}/refresh imports it again.")
     created_at: datetime
     expires_at: datetime
 
@@ -35,12 +37,13 @@ class DatasetV1(BaseModel):
 GONE = ("dataset_not_found", "This uploaded file is no longer available",
         "Uploaded files are deleted a day after they were uploaded. Upload it again to keep asking.")
 
-COLUMNS = "id, name, table_name, row_count, columns, suggestions, created_at, expires_at"
+COLUMNS = "id, name, table_name, row_count, columns, suggestions, source, created_at, expires_at"
 
 
 def _dataset(row) -> DatasetV1:
     return DatasetV1(id=row.id, name=row.name, table=row.table_name, rows=row.row_count, columns=row.columns,
-                     suggestions=row.suggestions, created_at=row.created_at, expires_at=row.expires_at)
+                     suggestions=row.suggestions, source=row.source, created_at=row.created_at,
+                     expires_at=row.expires_at)
 
 
 class Datasets:
@@ -50,9 +53,9 @@ class Datasets:
         self.per_owner = per_owner
         self._total_bytes = total_mb * 1024 * 1024
 
-    def add(self, owner: str, upload: Upload) -> DatasetV1:
-        """Keep an upload. Raises UploadRejected when the owner already has as many as they may keep, or when
-        uploads are full."""
+    def add(self, owner: str, upload: Upload, source: str | None = None) -> DatasetV1:
+        """Keep an upload (`source`: the sheet it was imported from). Raises UploadRejected when the owner already
+        has as many as they may keep, or when uploads are full."""
         size = len(upload.parquet)
         with self._engine.begin() as conn:
             conn.execute(text("DELETE FROM app.datasets WHERE expires_at < now()"))
@@ -64,21 +67,47 @@ class Datasets:
                 raise UploadRejected("too_many_datasets", f"You already have {mine} files uploaded",
                                      "Delete one to upload another. Each is deleted a day after it was uploaded.",
                                      status=409)
-            used = conn.execute(text("SELECT COALESCE(SUM(size_bytes), 0) FROM app.datasets")).scalar()
-            if used + size > self._total_bytes:
-                raise UploadRejected("uploads_full", "Uploads are full right now",
-                                     "Uploaded files are deleted after a day, so try again later.", status=503)
+            self._check_room(conn, size)
             row = conn.execute(text(f"""
                 INSERT INTO app.datasets (id, owner, name, table_name, row_count, columns, suggestions, parquet,
-                                          size_bytes, expires_at)
+                                          size_bytes, source, expires_at)
                 VALUES (:id, :owner, :name, :table, :rows, CAST(:columns AS jsonb), CAST(:suggestions AS jsonb),
-                        :parquet, :size, now() + :ttl)
+                        :parquet, :size, :source, now() + :ttl)
                 RETURNING {COLUMNS}
-            """), {"id": uuid4(), "owner": owner, "name": upload.name, "table": upload.table, "rows": upload.rows,
-                   "columns": json.dumps([c.model_dump() for c in upload.columns]),
-                   "suggestions": json.dumps(upload.suggestions), "parquet": upload.parquet, "size": size,
-                   "ttl": self.ttl}).one()
+            """), {"id": uuid4(), "owner": owner, "source": source, **self._values(upload)}).one()
         return _dataset(row)
+
+    def replace(self, id: UUID, owner: str, upload: Upload) -> DatasetV1 | None:
+        """Put a fresh copy of the owner's dataset in place (an imported sheet, imported again), keeping its id so
+        conversations about it carry on, for another full day. None if it is gone."""
+        with self._engine.begin() as conn:
+            old = conn.execute(text("""
+                SELECT size_bytes FROM app.datasets WHERE id = :id AND owner = :owner AND expires_at > now()
+                FOR UPDATE
+            """), {"id": id, "owner": owner}).first()
+            if old is None:
+                return None
+            self._check_room(conn, len(upload.parquet) - old.size_bytes)
+            row = conn.execute(text(f"""
+                UPDATE app.datasets SET name = :name, table_name = :table, row_count = :rows,
+                       columns = CAST(:columns AS jsonb), suggestions = CAST(:suggestions AS jsonb),
+                       parquet = :parquet, size_bytes = :size, expires_at = now() + :ttl
+                WHERE id = :id
+                RETURNING {COLUMNS}
+            """), {"id": id, **self._values(upload)}).one()
+        return _dataset(row)
+
+    def _values(self, upload: Upload) -> dict:
+        return {"name": upload.name, "table": upload.table, "rows": upload.rows,
+                "columns": json.dumps([c.model_dump() for c in upload.columns]),
+                "suggestions": json.dumps(upload.suggestions), "parquet": upload.parquet,
+                "size": len(upload.parquet), "ttl": self.ttl}
+
+    def _check_room(self, conn, more_bytes: int) -> None:
+        used = conn.execute(text("SELECT COALESCE(SUM(size_bytes), 0) FROM app.datasets")).scalar()
+        if used + more_bytes > self._total_bytes:
+            raise UploadRejected("uploads_full", "Uploads are full right now",
+                                 "Uploaded files are deleted after a day, so try again later.", status=503)
 
     def get(self, id: UUID, owner: str | None) -> DatasetV1 | None:
         if not owner:

@@ -3,6 +3,7 @@ questions about them in a locked-down DuckDB."""
 
 import uuid
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -14,6 +15,7 @@ from app.datasets.csv_upload import Limits, UploadRejected, identifier, read_csv
 from app.datasets.duck import DuckDBSource
 from app.datasets.profile import personal_reason
 from app.datasets.registry import DatasetAnalysts
+from app.datasets.sheets import SheetsClient, parse
 from app.datasets.store import Datasets
 from app.db import QueryError
 from app.main import create_app
@@ -187,6 +189,102 @@ def test_an_analyst_is_built_once_per_dataset_and_forgotten_when_gone(app_tables
     analysts.close()
 
 
+# --- importing a Google Sheet -----------------------------------------------------------------------------------
+
+SHEET_ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
+SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit#gid=42"
+
+
+class FakeGoogle:
+    """Google Sheets' CSV export: the sheet's data, or whatever a test sets."""
+
+    def __init__(self):
+        self.csv = SALES
+        self.respond = None  # replaces the answer when set: a function of the request
+        self.seen: list[str] = []
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        self.seen.append(str(request.url))
+        if self.respond:
+            return self.respond(request)
+        if request.url.host == "docs.google.com":  # Google sends the export on to its content host
+            return httpx.Response(307, headers={"location": "https://doc-0s-4c-sheets.googleusercontent.com/export/x"})
+        return httpx.Response(200, content=self.csv, headers={
+            "content-type": "text/csv", "content-disposition": "attachment; filename=\"x.csv\"; "
+                                                               "filename*=UTF-8''Shop%20Sales%20-%20Q1.csv"})
+
+
+@pytest.mark.parametrize(("link", "gid"), [
+    (SHEET, "42"),
+    (f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit?usp=sharing", None),
+    (f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit?gid=7#gid=7", "7"),
+    (f"  https://docs.google.com/spreadsheets/d/{SHEET_ID}  ", None),
+])
+def test_a_sheets_link_names_the_sheet_and_tab(link, gid):
+    sheet = parse(link)
+    assert (sheet.id, sheet.gid) == (SHEET_ID, gid)
+    assert sheet.export_url.startswith(f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv")
+
+
+@pytest.mark.parametrize("link", [
+    "http://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz",  # not https
+    "https://docs.google.com.evil.example/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+    "https://evil.example/?https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz",
+    "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/edit",
+    "https://docs.google.com/spreadsheets/d/short/edit",
+    "file:///etc/passwd",
+])
+def test_anything_but_a_sheets_link_is_refused(link):
+    with pytest.raises(UploadRejected) as refused:
+        parse(link)
+    assert refused.value.code == "not_a_sheet"
+
+
+def fetch_with(respond):
+    google = FakeGoogle()
+    google.respond = respond
+    return SheetsClient(transport=httpx.MockTransport(google.handle)).fetch(parse(SHEET), 1000), google
+
+
+def test_a_public_sheet_is_fetched_from_googles_hosts_only():
+    google = FakeGoogle()
+    data, name = SheetsClient(transport=httpx.MockTransport(google.handle)).fetch(parse(SHEET), 10_000)
+    assert data == SALES and name == "Shop Sales - Q1.csv"
+    assert google.seen[0] == f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=42"
+    assert google.seen[1].startswith("https://doc-0s-4c-sheets.googleusercontent.com/")
+
+
+@pytest.mark.parametrize(("respond", "code"), [
+    (lambda r: httpx.Response(302, headers={"location": "https://accounts.google.com/ServiceLogin"}), "sheet_not_public"),
+    (lambda r: httpx.Response(302, headers={"location": "http://169.254.169.254/latest/meta-data"}), "sheet_not_public"),
+    (lambda r: httpx.Response(302, headers={"location": "//evil.example/x.csv"}), "sheet_not_public"),
+    (lambda r: httpx.Response(302, headers={"location": "https://docs.google.com:8443/x"}), "sheet_not_public"),
+    (lambda r: httpx.Response(302, headers={"location": "https://x.googleusercontent.com.evil.example/"}),
+     "sheet_not_public"),
+    (lambda r: httpx.Response(200, content=b"<html>Sign in</html>", headers={"content-type": "text/html"}),
+     "sheet_not_public"),
+    (lambda r: httpx.Response(401), "sheet_not_public"),
+    (lambda r: httpx.Response(404), "sheet_not_found"),
+    (lambda r: httpx.Response(500), "sheet_unavailable"),
+    (lambda r: httpx.Response(200, content=b"a,b\n" + b"1,2\n" * 500, headers={"content-type": "text/csv"}),
+     "file_too_large"),
+    (lambda r: httpx.Response(302, headers={"location": str(r.url)}), "sheet_unavailable"),  # a redirect loop
+])
+def test_a_sheet_that_cant_be_had_says_why(respond, code):
+    with pytest.raises(UploadRejected) as refused:
+        fetch_with(respond)
+    assert refused.value.code == code and refused.value.detail
+
+
+def test_a_timeout_is_a_sheet_that_didnt_answer():
+    def slow(request):
+        raise httpx.ReadTimeout("slow", request=request)
+
+    with pytest.raises(UploadRejected) as refused:
+        fetch_with(slow)
+    assert refused.value.code == "sheet_unavailable"
+
+
 # --- through the API -------------------------------------------------------------------------------------------
 
 @pytest.fixture
@@ -195,19 +293,22 @@ def make(db, app_tables):
     store = Datasets(app_tables)
     analysts = DatasetAnalysts(store, lambda: llm, statement_timeout_ms=2000)
     messages = Messages(app_tables)
+    google = FakeGoogle()
+    sheets = SheetsClient(transport=httpx.MockTransport(google.handle))
 
     def build(session=True):
         app = create_app(analyst_factory=lambda: Analyst(llm, db), db_factory=lambda: db, llm_factory=lambda: llm,
                          sessions_factory=lambda: Sessions("secret", 3600), quota_factory=lambda: None,
                          messages_factory=lambda: messages, datasets_factory=lambda: store,
                          dataset_analysts_factory=lambda: analysts, github_factory=lambda: None,
-                         transcriber_factory=lambda: None)
+                         transcriber_factory=lambda: None, sheets_factory=lambda: sheets)
         client = TestClient(app)
         if session:
             client.post("/v1/session", json={})
         return client
 
     build.llm = llm  # the model every app built here shares, so a test can script its queries
+    build.google = google
     yield build
     analysts.close()
 
@@ -310,3 +411,38 @@ def test_a_shared_answer_about_an_upload_names_the_file(make):
     assert share["about"] == "sales.csv"
     client.delete(f"/v1/datasets/{dataset['id']}")
     assert client.get(f"/v1/shares/{share['id']}").json()["answer"]["rows"][0] == ["Bengaluru", 3550.4]
+
+
+def test_a_sheet_is_imported_asked_about_and_refreshed(make):
+    client = make()
+    r = client.post("/v1/datasets/sheets", json={"url": SHEET})
+    assert r.status_code == 201
+    dataset = r.json()
+    assert dataset["name"] == "Shop Sales - Q1.csv" and dataset["table"] == "shop_sales_q1" and dataset["rows"] == 5
+    assert dataset["source"] == f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit#gid=42"
+    make.llm.sql = ["SELECT city, SUM(amount_inr) AS total FROM shop_sales_q1 GROUP BY city ORDER BY total DESC"]
+    assert ask(client, dataset["id"]).json()["answer"]["rows"][0] == ["Bengaluru", 3550.4]
+
+    make.google.csv = SALES + b"6,2025-03-09,Ravi K,ravi@example.org,Mumbai,Books,9000,true\n"
+    fresh = client.post(f"/v1/datasets/{dataset['id']}/refresh")
+    assert fresh.status_code == 200
+    assert fresh.json()["id"] == dataset["id"] and fresh.json()["rows"] == 6
+    assert ask(client, dataset["id"]).json()["answer"]["rows"][0] == ["Mumbai", 9830.0]  # the new copy is asked
+
+
+def test_only_an_imported_sheet_can_be_refreshed(make):
+    client = make()
+    uploaded = upload(client).json()
+    r = client.post(f"/v1/datasets/{uploaded['id']}/refresh")
+    assert r.status_code == 422 and r.json()["code"] == "not_refreshable"
+    imported = client.post("/v1/datasets/sheets", json={"url": SHEET}).json()
+    assert make().post(f"/v1/datasets/{imported['id']}/refresh").status_code == 404  # someone else's
+
+
+def test_a_private_sheet_or_a_bad_link_is_refused_with_what_to_do(make):
+    client = make()
+    r = client.post("/v1/datasets/sheets", json={"url": "https://example.com/data.csv"})
+    assert r.status_code == 422 and r.json()["code"] == "not_a_sheet"
+    make.google.respond = lambda req: httpx.Response(302, headers={"location": "https://accounts.google.com/x"})
+    r = client.post("/v1/datasets/sheets", json={"url": SHEET})
+    assert r.status_code == 422 and r.json()["code"] == "sheet_not_public" and "Anyone with the link" in r.json()["detail"]

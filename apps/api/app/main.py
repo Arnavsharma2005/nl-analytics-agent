@@ -26,6 +26,7 @@ from app.config import get_settings
 from app.context import Context
 from app.datasets.csv_upload import Limits
 from app.datasets.registry import DatasetAnalysts
+from app.datasets.sheets import SheetsClient
 from app.datasets.store import Datasets
 from app.db import Database
 from app.llm import FallbackLLM
@@ -158,7 +159,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                quota_factory=get_quota, messages_factory=get_messages, suggester_factory=get_suggester,
                transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github,
                datasets_factory=get_datasets, dataset_analysts_factory=get_dataset_analysts,
-               shares_factory=get_shares) -> FastAPI:
+               shares_factory=get_shares, sheets_factory=SheetsClient) -> FastAPI:
     settings = get_settings()
 
     @asynccontextmanager
@@ -222,6 +223,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         app.include_router(datasets_router(
             store=datasets_factory, analysts=dataset_analysts_factory, identify=identify, spend=spend,
             limits=Limits(settings.upload_max_mb * 1024 * 1024, settings.upload_max_rows, settings.upload_max_columns),
+            sheets=sheets_factory,
         ))
     app.include_router(shares_router(shares=shares_factory, messages=messages_factory, datasets=datasets_factory,
                                      identify=identify))

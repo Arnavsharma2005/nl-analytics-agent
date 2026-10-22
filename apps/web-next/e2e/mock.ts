@@ -55,8 +55,20 @@ export const SALES_CSV: Dataset = {
     { name: "amount_inr", header: "Amount (INR)", kind: "number", empty: 0, distinct: 1100, low: 99.9, high: 22000, examples: [], personal: null },
   ],
   suggestions: ["Total amount inr by city", "Amount inr by month", "How many rows are there for each city?"],
+  source: null,
   created_at: new Date().toISOString(),
   expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+};
+
+export const SHEET_URL = "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit#gid=0";
+
+/** An imported Google Sheet, as the API returns it. */
+export const SHEET: Dataset = {
+  ...SALES_CSV,
+  id: "5e2f8a1b-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
+  name: "Shop Sales - Q1.csv",
+  table: "shop_sales_q1",
+  source: SHEET_URL,
 };
 
 /** A shared snapshot of message `m`, as the API returns it. */
@@ -99,6 +111,11 @@ export interface Api {
   datasets: Dataset[];
   uploaded: string[];
   upload: (name: string) => { status: number; body: unknown };
+  /** Google Sheets links imported and how an import is answered; ids of datasets refreshed and how that is answered. */
+  imported: string[];
+  importSheet: (url: string) => { status: number; body: unknown };
+  refreshed: string[];
+  refresh: (dataset: Dataset) => { status: number; body: unknown };
   /** Shared answers by link id, and the message ids that were shared. */
   shares: Record<string, Share>;
   shared: string[];
@@ -116,6 +133,10 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     datasets: [],
     uploaded: [],
     upload: () => ({ status: 201, body: SALES_CSV }),
+    imported: [],
+    importSheet: () => ({ status: 201, body: SHEET }),
+    refreshed: [],
+    refresh: (d) => ({ status: 200, body: { ...d, rows: d.rows + 10 } }),
     shares: {},
     shared: [],
     ...overrides,
@@ -175,6 +196,22 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
       return route.fulfill({ status: 204 });
     }
     return json(route, found);
+  });
+  await page.route("**/v1/datasets/sheets", (route) => {
+    const { url } = route.request().postDataJSON();
+    api.imported.push(url);
+    const r = api.importSheet(url);
+    if (r.status < 400) api.datasets = [r.body as Dataset, ...api.datasets];
+    return json(route, r.body, r.status);
+  });
+  await page.route("**/v1/datasets/*/refresh", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/")[3];
+    const found = api.datasets.find((d) => d.id === id);
+    if (!found) return json(route, { status: 404, code: "dataset_not_found", title: "This uploaded file is no longer available" }, 404);
+    api.refreshed.push(id);
+    const r = api.refresh(found);
+    if (r.status < 400) api.datasets = api.datasets.map((d) => (d.id === id ? (r.body as Dataset) : d));
+    return json(route, r.body, r.status);
   });
   await page.route("**/v1/messages/*/share", (route) => {
     const id = new URL(route.request().url()).pathname.split("/")[3];
