@@ -85,6 +85,8 @@ jobs:
             apps/web-next/package-lock.json
             apps/web-next/tools/package-lock.json
       - run: npm ci
+      # The checkout belongs to another user than the container's root, so git refuses it until it is marked safe.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Types generated from the OpenAPI spec are up to date
         run: npm run gen:api && git diff --exit-code src/api/schema.d.ts
       - run: npm run build
