@@ -1,7 +1,8 @@
 """Run the labelled question set through the full agent and report SQL correctness.
 
 Usage (from the repo root, with DATABASE_URL and an LLM key set):
-    python eval/run_eval.py                 # all 30 questions
+    python eval/run_eval.py                 # all 120 questions
+    python eval/run_eval.py --split test    # the 70 held-out questions: the number to report
     python eval/run_eval.py --ids 1 5 17    # a subset
     python eval/run_eval.py --gold-only     # just check that every gold query runs (no LLM needed)
     python eval/run_eval.py --delay 4       # pause between questions to stay under free-tier rate limits
@@ -46,6 +47,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--questions", default=str(ROOT / "eval" / "questions.yaml"))
     parser.add_argument("--ids", type=int, nargs="*")
+    parser.add_argument("--split", choices=["dev", "test"], help="only the dev (tuning) or test (held-out) questions")
     parser.add_argument("--gold-only", action="store_true")
     parser.add_argument("--delay", type=float, default=0.0)
     parser.add_argument("--out", help="where to write the results (default eval/results/<date>-<commit>.json)")
@@ -60,6 +62,8 @@ def main() -> int:
     questions = yaml.safe_load(Path(args.questions).read_text())
     if args.ids:
         questions = [q for q in questions if q["id"] in set(args.ids)]
+    if args.split:
+        questions = [q for q in questions if q["split"] == args.split]
 
     if args.gold_only:
         bad = 0
@@ -99,7 +103,8 @@ def main() -> int:
         pred = answer.rows if answer and answer.intent == "data_query" else None
         correct = pred is not None and not error and results_match(gold, pred, q.get("ordered", False))
         results.append({
-            "id": q["id"], "category": q["category"], "question": q["question"], "correct": correct,
+            "id": q["id"], "category": q["category"], "difficulty": q["difficulty"], "split": q["split"],
+            "question": q["question"], "correct": correct,
             "intent": answer.intent if answer else None, "sql": answer.sql if answer else None,
             "attempts": answer.attempts if answer else 0, "latency_s": round(latency, 2), "error": error,
             "gold_rows": len(gold), "pred_rows": None if pred is None else len(pred),
@@ -116,9 +121,12 @@ def main() -> int:
         llm.save(args.record)
         print(f"\nRecorded model answers to {args.record}")
 
-    by_cat = defaultdict(list)
-    for r in results:
-        by_cat[r["category"]].append(r["correct"])
+    def tally(field: str) -> dict[str, str]:
+        groups = defaultdict(list)
+        for r in results:
+            groups[r[field]].append(r["correct"])
+        return {k: f"{sum(v)}/{len(v)}" for k, v in groups.items()}
+
     run_at = datetime.now(UTC)
     commit = git_commit()
     summary = {
@@ -129,7 +137,9 @@ def main() -> int:
         "questions": len(results),
         "correct": sum(r["correct"] for r in results),
         "accuracy_pct": round(100 * sum(r["correct"] for r in results) / max(len(results), 1), 1),
-        "by_category": {c: f"{sum(v)}/{len(v)}" for c, v in by_cat.items()},
+        "by_split": tally("split"),
+        "by_difficulty": tally("difficulty"),
+        "by_category": tally("category"),
         "repaired_by_retry": sum(1 for r in results if r["correct"] and r["attempts"] > 1),
         "median_latency_s": round(statistics.median(r["latency_s"] for r in results), 2) if results else None,
     }
