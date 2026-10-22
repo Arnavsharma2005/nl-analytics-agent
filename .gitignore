@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 node_modules/
-frontend/dist/
+apps/web/dist/
+*.tsbuildinfo
 eval/results.json
 .pytest_cache/

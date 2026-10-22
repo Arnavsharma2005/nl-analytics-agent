@@ -52,7 +52,7 @@ Run these from the repo folder, e.g. `C:\Users\arnav\nl-analytics-agent`:
 # 1. Create a virtual environment and install the backend packages (one time)
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1          # the prompt now starts with (.venv)
-pip install -r backend\requirements-dev.txt
+pip install -r apps\api\requirements-dev.txt
 
 # 2. Start PostgreSQL. With Docker Desktop:
 docker compose up db -d
@@ -60,7 +60,7 @@ docker compose up db -d
 #    DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/analytics
 
 # 3. Create the "analytics" database and load the sample data (one time)
-cd backend
+cd apps\api
 python -m app.seed
 
 # 4. Start the API on http://localhost:8000
@@ -120,15 +120,15 @@ Render deletes free databases 30 days after creation unless you upgrade.
 
 ## 4. Change the frontend after deploying
 
-The frontend is in `frontend/src` (React + Vite). Work on it locally:
+The frontend is in `apps/web/src` (React + Vite). Work on it locally:
 
 ```bash
 # terminal 1: backend
-cd backend && uvicorn app.main:app --reload
+cd apps/api && uvicorn app.main:app --reload
 
 # terminal 2: frontend with hot reload
-cd frontend && npm install && npm run dev   # http://localhost:5173
+cd apps/web && npm install && npm run dev   # http://localhost:5173
 ```
 
 Push to `main` when you're happy. Railway rebuilds and redeploys on every push, because the service is linked
-to the GitHub repo. The `Dockerfile` builds the frontend, so you don't commit `frontend/dist`.
+to the GitHub repo. The `Dockerfile` builds the frontend, so you don't commit `apps/web/dist`.

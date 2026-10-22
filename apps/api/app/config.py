@@ -6,9 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Read the repo-root .env wherever the app is started from (repo root, backend/ or eval/);
+    # Read the repo-root .env wherever the app is started from (repo root, apps/api/ or eval/);
     # a .env in the current directory, if any, wins.
-    model_config = SettingsConfigDict(env_file=(Path(__file__).resolve().parents[2] / ".env", ".env"), extra="ignore")
+    model_config = SettingsConfigDict(env_file=(Path(__file__).resolve().parents[3] / ".env", ".env"), extra="ignore")
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/analytics"
     # Providers tried in order; see app/providers.py. The first one with a key that responds wins.

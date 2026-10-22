@@ -59,7 +59,7 @@ Free model lists change often, so check each provider's model page if one report
 
 ## The data
 
-`backend/app/seed.py` generates a deterministic e-commerce dataset for Jan 2024 to Dec 2025: 6 regions,
+`apps/api/app/seed.py` generates a deterministic e-commerce dataset for Jan 2024 to Dec 2025: 6 regions,
 2,000 customers, 8 categories, 120 products, about 17.8k orders and 31k line items, with growth trends,
 festive-season peaks, returns and cancellations. The same seed always gives the same rows, so evaluation
 results are reproducible.
@@ -72,13 +72,13 @@ Requires Python 3.12+, Node 22+, and PostgreSQL 16 (or Docker).
 cp .env.example .env               # add keys for any of the 5 providers (at least one)
 docker compose up db -d            # or use your own Postgres and set DATABASE_URL
 
-cd backend
+cd apps/api
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 python -m app.seed                 # create tables and load the sample data
 uvicorn app.main:app --reload      # API on http://localhost:8000
 
-cd ../frontend
+cd ../web
 npm install
 npm run dev                        # UI on http://localhost:5173
 ```
@@ -122,7 +122,7 @@ single provider, e.g. `LLM_PROVIDERS=groq python eval/run_eval.py`.
 ## Tests
 
 ```bash
-cd backend && python -m pytest
+cd apps/api && python -m pytest
 ```
 
 Tests use scripted fake models against a real Postgres. They cover the SQL guard, the retry loop
@@ -150,7 +150,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO analytics_reader;
 ## Project layout
 
 ```
-backend/
+apps/api/
   app/agents/     router, sql_agent, chart, summary
   app/graph.py    LangGraph wiring and the retry loop
   app/sql_guard.py, app/db.py   validation, introspection, read-only execution
@@ -158,7 +158,7 @@ backend/
   app/main.py     FastAPI app (also serves the built frontend)
   app/seed.py     sample dataset
   tests/
-frontend/         React + Vite + Recharts
+apps/web/         React + Vite + Recharts
 eval/             questions.yaml and run_eval.py
 PRD.md            product requirements
 ```

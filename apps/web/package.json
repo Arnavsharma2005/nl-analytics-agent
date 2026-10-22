@@ -1,5 +1,5 @@
 {
-  "name": "nl-analytics-agent-frontend",
+  "name": "nl-analytics-agent-web",
   "private": true,
   "version": "1.0.0",
   "type": "module",

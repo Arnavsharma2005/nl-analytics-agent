@@ -1,18 +1,18 @@
 # Single image: builds the React app, then serves it and the API from FastAPI.
-FROM node:22-alpine AS frontend
-WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json ./
+FROM node:22-alpine AS web
+WORKDIR /app/apps/web
+COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
-COPY frontend/ ./
+COPY apps/web/ ./
 RUN npm run build
 
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-WORKDIR /app/backend
-COPY backend/requirements.txt ./
+WORKDIR /app/apps/api
+COPY apps/api/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY backend/ ./
-COPY --from=frontend /app/frontend/dist /app/frontend/dist
+COPY apps/api/ ./
+COPY --from=web /app/apps/web/dist /app/apps/web/dist
 EXPOSE 8000
 # Load the sample data on first start (skipped once it's there), for hosts without a pre-deploy step.
 CMD ["sh", "-c", "python -m app.seed --if-empty && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
