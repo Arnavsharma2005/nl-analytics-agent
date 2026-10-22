@@ -133,7 +133,7 @@ def generate(rng: random.Random):
                 lines.append((prod[0], qty, round(prod[3] * (1 - discount), 2), cat_id))
             if not lines:
                 continue
-            ret_rate = max(cat_return[l[3]] for l in lines)
+            ret_rate = max(cat_return[line[3]] for line in lines)
             r = rng.random()
             status = "cancelled" if r < 0.06 else "returned" if r < 0.06 + ret_rate else "completed"
             orders.append((oid, cust[0], d, status, channel))

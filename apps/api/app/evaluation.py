@@ -37,7 +37,7 @@ def _sort_key(v):
 def _columns_match(gold: list, pred: list, ordered: bool) -> bool:
     if not ordered:
         gold, pred = sorted(gold, key=_sort_key), sorted(pred, key=_sort_key)
-    return all(_same(g, p) for g, p in zip(gold, pred))
+    return all(_same(g, p) for g, p in zip(gold, pred, strict=True))  # equal lengths: row counts checked first
 
 
 def results_match(gold_rows: list[list], pred_rows: list[list], ordered: bool = False) -> bool:

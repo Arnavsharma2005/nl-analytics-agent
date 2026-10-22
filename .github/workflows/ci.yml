@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -27,11 +34,18 @@ jobs:
           cache: pip
           cache-dependency-path: apps/api/requirements*.txt
       - run: pip install -r apps/api/requirements-dev.txt
+      - name: Lint
+        run: ruff check .
       - name: Unit and integration tests (scripted LLM, real Postgres)
         working-directory: apps/api
         run: python -m pytest -q
       - name: Every gold query in the eval set runs
         run: python eval/run_eval.py --gold-only
+      - name: Replay the recorded eval run; fail if any question regressed
+        if: hashFiles('eval/baseline/cassette.json') != ''
+        run: |
+          python eval/run_eval.py --replay eval/baseline/cassette.json --out "$RUNNER_TEMP/replay.json"
+          python eval/compare.py eval/baseline/results.json "$RUNNER_TEMP/replay.json" --fail-on-regression
 
   web:
     runs-on: ubuntu-latest
@@ -47,3 +61,13 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

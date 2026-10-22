@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     rows_for_llm: int = 50
 
     cors_origins: list[str] = ["http://localhost:5173"]
+
+    # Set by Render on every deploy; reported by /healthz so you can tell which build is live.
+    git_commit: str | None = Field(default=None, validation_alias=AliasChoices("GIT_COMMIT", "RENDER_GIT_COMMIT"))
 
     @field_validator("database_url")
     @classmethod

@@ -1,0 +1,13 @@
+# Lint settings for the Python code (apps/api and eval). Run from the repo root: ruff check .
+line-length = 120
+target-version = "py312"
+extend-exclude = ["apps/web"]
+
+[lint]
+# Pyflakes, pycodestyle errors and warnings, import order, likely bugs, and modern syntax.
+select = ["F", "E", "W", "I", "B", "UP"]
+# Long lines are left to the reviewer: prompts, SQL and seed data read better unwrapped.
+ignore = ["E501", "UP047"]  # UP047: the LLM protocol shares one TypeVar across methods; keep one style
+
+[lint.isort]
+known-first-party = ["app"]
