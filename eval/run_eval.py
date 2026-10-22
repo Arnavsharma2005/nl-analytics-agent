@@ -52,11 +52,11 @@ def main() -> int:
                 print(f"#{q['id']:>2} FAIL {e}")
         return 1 if bad else 0
 
-    from app.graph import build_graph
+    from app.analyst import Analyst
     from app.providers import build_llm
 
     llm = build_llm(settings)
-    graph = build_graph(llm, db, settings.max_sql_attempts, settings.rows_for_llm)
+    analyst = Analyst(llm, db, max_attempts=settings.max_sql_attempts, rows_for_llm=settings.rows_for_llm)
     results = []
     for i, q in enumerate(questions):
         if i and args.delay:
@@ -64,20 +64,20 @@ def main() -> int:
         gold = db.run(q["gold_sql"]).rows
         start = time.perf_counter()
         try:
-            state = graph.invoke({"question": q["question"]})
-            error = state.get("error")
+            answer = analyst.ask(q["question"])
+            error = answer.error
         except Exception as e:  # noqa: BLE001 - one bad question should not stop the run
-            state, error = {}, f"{type(e).__name__}: {e}"
+            answer, error = None, f"{type(e).__name__}: {e}"
         latency = time.perf_counter() - start
-        pred = state.get("rows")
+        pred = answer.rows if answer and answer.intent == "data_query" else None
         correct = pred is not None and not error and results_match(gold, pred, q.get("ordered", False))
         results.append({
             "id": q["id"], "category": q["category"], "question": q["question"], "correct": correct,
-            "intent": state.get("intent"), "sql": state.get("sql"), "attempts": state.get("sql_attempts", 0),
+            "intent": answer and answer.intent, "sql": answer and answer.sql, "attempts": answer.attempts if answer else 0,
             "latency_s": round(latency, 2), "error": error,
             "gold_rows": len(gold), "pred_rows": None if pred is None else len(pred),
             # The provider that wrote the final SQL (fallbacks can mix models within one run).
-            "sql_provider": next((c["provider"] for c in reversed(state.get("llm_calls", []))
+            "sql_provider": next((c["provider"] for c in reversed(answer.llm_calls if answer else [])
                                   if c["step"] == "sql_agent" and c["ok"]), None),
         })
         mark = "PASS" if correct else "FAIL"

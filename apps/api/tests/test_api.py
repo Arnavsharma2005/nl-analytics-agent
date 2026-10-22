@@ -3,7 +3,7 @@ import json
 from fastapi.testclient import TestClient
 
 from app.agents.chart import ChartSpec
-from app.graph import build_graph
+from app.analyst import Analyst
 from app.main import create_app
 
 from .conftest import FakeLLM
@@ -11,8 +11,8 @@ from .test_graph import REVENUE_BY_REGION
 
 
 def client(db):
-    graph = build_graph(FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="t")), db)
-    return TestClient(create_app(graph_factory=lambda: graph, db_factory=lambda: db))
+    analyst = Analyst(FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="t")), db)
+    return TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db))
 
 
 def test_health_schema_examples(db):
@@ -53,8 +53,8 @@ def test_providers_endpoint_and_all_failed_is_503(db):
 
     llm = FallbackLLM([Provider("groq", "Groq · m", "https://x", "m", "k"), Provider("mistral", "Mistral · m", "https://x", "m", None)],
                       client_factory=lambda p, t: Down())
-    graph = build_graph(llm, db)
-    c = TestClient(create_app(graph_factory=lambda: graph, db_factory=lambda: db, llm_factory=lambda: llm))
+    analyst = Analyst(llm, db)
+    c = TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db, llm_factory=lambda: llm))
     r = c.post("/api/ask", json={"question": "Revenue by region"})
     assert r.status_code == 503 and r.json()["errors"] == [{"provider": "Groq · m", "error": "rate limited"}]
     status = c.get("/api/providers").json()
@@ -62,3 +62,10 @@ def test_providers_endpoint_and_all_failed_is_503(db):
     assert status[1] == {"name": "mistral", "label": "Mistral · m", "configured": False, "cooling_down_s": 0}
     assert "key" not in str(status)
     assert AllProvidersFailed
+
+
+def test_answer_keeps_every_field_the_web_app_reads(db):
+    # apps/web/src/types.ts AskResult. Fields may be added to Answer, never renamed or removed.
+    body = client(db).post("/api/ask", json={"question": "Revenue by region"}).json()
+    assert set(body) >= {"question", "intent", "answer", "sql", "sql_reasoning", "columns", "rows", "truncated", "chart",
+                         "chart_source", "summary", "error", "attempts", "timings", "llm_calls"}
