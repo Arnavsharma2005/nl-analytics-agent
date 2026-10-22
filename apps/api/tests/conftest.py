@@ -5,7 +5,6 @@ import pytest
 from pydantic import BaseModel
 
 from app.agents.chart import ChartSpec
-from app.agents.router import RouteDecision
 from app.agents.sql_agent import SQLDraft
 
 TEST_DB = os.environ.get("TEST_DATABASE_URL", os.environ.get("DATABASE_URL", "postgresql+psycopg://postgres@localhost:5432/analytics"))
@@ -17,7 +16,7 @@ class FakeLLM:
     `sql` is a list of queries returned on successive SQL-agent calls (the last one repeats)."""
 
     def __init__(self, intent="data_query", sql=("SELECT 1 AS n",), chart=None, summary="Summary.", schema_answer="We have sales data.",
-                 assumptions=(), standalone=None):
+                 assumptions=(), standalone=None, why=None):
         self.intent = intent
         self.sql = list(sql)
         self.chart = chart
@@ -25,6 +24,7 @@ class FakeLLM:
         self.schema_answer = schema_answer
         self.assumptions = list(assumptions)
         self.standalone = standalone  # the rewritten follow-up; None returns the latest message unchanged
+        self.why = why  # the WhyReading for a "why did it change?" question
         self.systems: list[tuple[str, str]] = []
         self.calls: list[tuple[str, str]] = []
         self.tiers: list[tuple[str, str]] = []
@@ -33,8 +33,12 @@ class FakeLLM:
         self.calls.append((output.__name__, user))
         self.tiers.append((output.__name__, tier))
         self.systems.append((output.__name__, system))
-        if output is RouteDecision:
-            return RouteDecision(intent=self.intent, reason="test")
+        if output.__name__.startswith("RouteDecision"):
+            return output(intent=self.intent, reason="test")
+        if output.__name__ == "WhyReading":
+            if self.why is None:
+                raise AssertionError("no WhyReading scripted")
+            return output(**self.why)
         if issubclass(output, SQLDraft):
             n = sum(1 for name, _ in self.calls if name.endswith("SQLDraft"))
             extra = {"assumptions": self.assumptions} if output is not SQLDraft else {}

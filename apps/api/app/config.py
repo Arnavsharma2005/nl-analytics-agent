@@ -91,6 +91,8 @@ class Settings(BaseSettings):
     check_results: bool = False
     # Have a summary rewritten once if it quotes figures that are not in the result.
     check_summaries: bool = False
+    # Answer "why did it change?" questions by splitting the change by each dimension in semantic/drivers.yml.
+    driver_analysis: bool = False
     # Embedding model for finding similar questions, on Cloudflare Workers AI (uses the CLOUDFLARE_* keys). Without
     # those keys, or with this empty, questions are compared by the words they share.
     embedding_model: str | None = "@cf/baai/bge-m3"

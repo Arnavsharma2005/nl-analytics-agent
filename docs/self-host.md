@@ -109,7 +109,10 @@ queries:
     starter: true          # offered as an example question on the front page
 ```
 
-Each part of `about` can be left out; the defaults describe "a business database" and say nothing about money.
+Each part of `about` can be left out; the defaults describe "a business database" and say nothing about money. A
+`drivers.yml` in the same folder (see [the demo's](../apps/api/semantic/drivers.yml)) describes your metrics and the
+columns to split them by, and with `DRIVER_ANALYSIS=true` questions like "why did signups fall last month?" are
+answered by splitting the change by each of them.
 Verified queries are shown to the analyst as worked examples, and `run_verified_query` over MCP runs them as written.
 
 In `compose.yml`, uncomment the volume under `app`, and in `.env` set `SEMANTIC_DIR=/semantic`:

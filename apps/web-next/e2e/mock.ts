@@ -38,6 +38,7 @@ export function message(id: string, conversation: string, question = "Revenue by
       verified_question: null,
       assumptions: ["revenue means completed orders only"],
       summary_verified: true,
+      analysis: null,
       confidence: {
         signals: {
           verified: false, nearest_example: null, attempts: 2, invalid_attempts: 0, failed_runs: 1, empty_retries: 0,

@@ -636,6 +636,11 @@ export interface components {
          */
         Answer: {
             /**
+             * Analysis
+             * @description drivers: a question about why a metric changed, answered by splitting the change by each dimension in code (the rows are the drivers, biggest first).
+             */
+            analysis: "drivers" | null;
+            /**
              * Answer
              * @description Plain-text reply for schema and out-of-scope questions.
              */

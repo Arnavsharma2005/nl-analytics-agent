@@ -4,6 +4,10 @@
 A question asked with earlier turns of its conversation is first rewritten to stand on its own (app.agents.followup);
 without them the pipeline starts at the router, exactly as for a single question.
 
+With `drivers` (app/analysis/drivers.py), a question about why a metric changed goes from the router to driver
+analysis instead of the SQL agent: the model picks the metric and periods, code splits the change, and the summary
+agent narrates the table.
+
 With a `Context`, data questions first collect their context (verified examples, values they name); a question
 a verified query answers outright skips the SQL agent. `check_results` sends a query that finds nothing back to the
 SQL agent once, and `check_summaries` has a summary rewritten once if it quotes figures the result lacks.
@@ -22,6 +26,9 @@ from app.agents.followup import Turn, standalone
 from app.agents.router import answer_schema_question, route
 from app.agents.sql_agent import write_sql
 from app.agents.summary import stream_summary, summarize
+from app.agents.why import Unreadable, read_why
+from app.analysis import drivers as driver_analysis
+from app.analysis.drivers import Drivers
 from app.brief import Brief
 from app.checks import EMPTY_RESULT, looks_empty, unsupported_numbers
 from app.context import Context, ContextPack
@@ -61,6 +68,8 @@ class AnalyticsState(TypedDict, total=False):
     chart_source: str
     summary: str
     answer: str
+    analysis: str  # "drivers" when driver analysis answered it
+    reading: str  # how a "why" question was read: the metric and periods compared
     error: str
     timings: Annotated[dict[str, float], _add_timings]
     llm_calls: Annotated[list[dict[str, Any]], operator.add]  # which provider served each step, incl. failovers
@@ -86,7 +95,8 @@ def _timed(name: str, llm: LLM | None = None):
 
 
 def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: int = 50, *, brief: Brief,
-                context: Context | None = None, check_results: bool = False, check_summaries: bool = False):
+                context: Context | None = None, check_results: bool = False, check_summaries: bool = False,
+                drivers: Drivers | None = None):
     schema = db.schema()
     schema_text = schema.describe()
     table_names = sorted(schema.tables)
@@ -102,7 +112,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
 
     @timed("router")
     def router_node(state: AnalyticsState):
-        decision = route(llm, state["question"], table_names, brief.about)
+        decision = route(llm, state["question"], table_names, brief.about, why=drivers is not None)
         return {"intent": decision.intent, "route_reason": decision.reason, "failures": [], "sql_attempts": 0}
 
     @timed("schema_answer")
@@ -168,7 +178,8 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
         emit = get_stream_writer()
 
         def write(unsupported=None) -> str:
-            args = (llm, state["question"], state["columns"], shown, len(rows), state.get("truncated", False),
+            question = state["question"] + (f"\nRead as: {state['reading']}" if state.get("reading") else "")
+            args = (llm, question, state["columns"], shown, len(rows), state.get("truncated", False),
                     unsupported, brief.money)
             if unsupported:
                 emit({"summary": ""})
@@ -199,13 +210,43 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
                 pass  # keep the first draft; summary_verified says it failed the check
         return {"summary": text, "summary_verified": not unsupported_numbers(text, shown, len(rows))}
 
+    data_range: list[Any] = []  # the first and last date driver analysis can compare, read once when first needed
+
+    @timed("drivers")
+    def drivers_node(state: AnalyticsState):
+        answered = {"intent": "data_query", "analysis": "drivers"}
+        try:
+            if not data_range:
+                where = f" WHERE {drivers.where}" if drivers.where else ""
+                sql = f"SELECT MIN({drivers.date}) AS first, MAX({drivers.date}) AS last FROM {drivers.tables}{where}"
+                data_range[:] = db.run(validate_sql(sql, set(table_names), personal_columns, db.dialect)).rows[0]
+            if data_range[0] is None:
+                return {**answered, "error": "There is no data to compare yet."}
+            metric_id, before, after = read_why(llm, state["question"], drivers, *data_range, brief.rules)
+            metric = drivers.metric(metric_id)
+            sql = validate_sql(driver_analysis.query(drivers, metric, before, after), set(table_names),
+                               personal_columns, db.dialect)
+            result = db.run(sql)
+        except (Unreadable, SQLValidationError, QueryError) as e:
+            return {**answered, "error": f"I couldn't work out what drove the change: {e}"}
+        split = driver_analysis.split(drivers, metric, result.columns, result.rows)
+        measure = "change" if metric.kind == "additive" else "contribution"
+        note = f"{metric.label}, {after.describe()} compared with {before.describe()}."
+        if split.left_out:
+            note += f" Not split by {', '.join(split.left_out)}, whose groups overlap for this metric."
+        return {**answered, "sql": sql, "sql_reasoning": note, "reading": note, "columns": split.columns,
+                "rows": mask_rows(split.rows), "truncated": split.truncated, "chart_source": "fallback",
+                "chart": {"type": "bar", "x": "driver", "y": [measure], "series": None,
+                          "title": f"What drove the change in {metric.label.lower()}"}}
+
     def give_up_node(state: AnalyticsState):
         last = state["failures"][-1]["error"] if state.get("failures") else "unknown error"
         return {"error": f"I couldn't build a working query after {max_attempts} attempts. Last error: {last}"}
 
     def after_router(state: AnalyticsState):
         first = "context" if context else "sql_agent"
-        return {"data_query": first, "schema_question": "schema_answer"}.get(state["intent"], "out_of_scope")
+        return {"data_query": first, "why_change": "drivers", "schema_question": "schema_answer"}.get(
+            state["intent"], "out_of_scope")
 
     def after_context(state: AnalyticsState):
         return "verified" if state["context"].verified else "sql_agent"
@@ -230,17 +271,22 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     g.add_node("summary_agent", summary_node)
     g.add_node("give_up", give_up_node)
 
+    why = ["drivers"] if drivers else []
+    if drivers:
+        g.add_node("drivers", drivers_node)
+        g.add_conditional_edges("drivers", lambda state: END if state.get("error") else "summary_agent",
+                                [END, "summary_agent"])
     g.add_conditional_edges(START, lambda state: "followup" if state.get("history") else "router",
                             ["followup", "router"])
     g.add_edge("followup", "router")
     if context:
         g.add_node("context", context_node)
         g.add_node("verified", verified_node)
-        g.add_conditional_edges("router", after_router, ["context", "schema_answer", "out_of_scope"])
+        g.add_conditional_edges("router", after_router, ["context", "schema_answer", "out_of_scope", *why])
         g.add_conditional_edges("context", after_context, ["verified", "sql_agent"])
         g.add_edge("verified", "validate")
     else:
-        g.add_conditional_edges("router", after_router, ["sql_agent", "schema_answer", "out_of_scope"])
+        g.add_conditional_edges("router", after_router, ["sql_agent", "schema_answer", "out_of_scope", *why])
     g.add_edge("sql_agent", "validate")
     g.add_conditional_edges("validate", after_check("execute"), ["execute", "sql_agent", "give_up"])
     g.add_conditional_edges("execute", after_check("chart_agent"), ["chart_agent", "sql_agent", "give_up"])
