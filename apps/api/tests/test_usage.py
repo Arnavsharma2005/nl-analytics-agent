@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.agents.chart import ChartSpec
-from app.analyst import Analyst, Answer, Done, Step
+from app.analyst import Analyst, Answer, Chart, Done, Step, Table, Token
 from app.answer_cache import AnswerCache, normalise
 from app.llm import AllProvidersFailed, FallbackLLM, Provider
 from app.main import create_app
@@ -238,5 +238,8 @@ def test_stream_serves_cache_hits(db, app_tables):
     first = asyncio.run(collect())
     second = asyncio.run(collect())
     assert len(first) > 2 and not first[-1].answer.cached
-    assert second == [Step("cache", "Found a recent answer to the same question"), Done(second[-1].answer)]
+    hit = second[-1].answer
+    assert second == [Step("cache", "Found a recent answer to the same question"),
+                      Table(hit.columns, hit.rows, hit.truncated), Chart(hit.chart), Token(hit.summary, replace=True),
+                      Done(hit)]
     assert isinstance(second[-1].answer, Answer) and second[-1].answer.cached

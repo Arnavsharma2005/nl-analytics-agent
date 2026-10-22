@@ -38,6 +38,8 @@ class FakeLLM:
             n = sum(1 for name, _ in self.calls if name.endswith("SQLDraft"))
             extra = {"assumptions": self.assumptions} if output is not SQLDraft else {}
             return output(reasoning="test", sql=self.sql[min(n, len(self.sql)) - 1], **extra)
+        if output.__name__ == "Explanation":
+            return output(steps=["Add up the sales of completed orders.", "Split them by region."])
         if output is ChartSpec:
             if self.chart is None:
                 raise RuntimeError("no chart scripted")
@@ -54,6 +56,11 @@ class FakeLLM:
             n = sum(1 for name, u in self.calls if name == "text" and u.startswith("Question:"))
             return self.summary[min(n, len(self.summary)) - 1]
         return self.summary
+
+    def stream_text(self, system: str, user: str, tier: str = "strong"):
+        text = self.text(system, user, tier=tier)
+        half = len(text) // 2
+        yield from (text[:half], text[half:])
 
 
 @pytest.fixture(scope="session")
@@ -98,5 +105,5 @@ def app_tables(app_engine):
     from sqlalchemy import text
 
     with app_engine.begin() as conn:
-        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache"))
+        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback"))
     return app_engine

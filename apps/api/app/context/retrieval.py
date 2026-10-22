@@ -115,6 +115,15 @@ class Context:
                              if s >= embedder.same_question and sig == mine), None)
         return ContextPack(examples, values, verified, embedder.name)
 
+    def related(self, question: str, limit: int = 3) -> list[str]:
+        """Verified questions most like `question` (not the same one), as follow-ups to suggest."""
+        if not self._queries:
+            return []
+        scored, _ = self._similarities(question)
+        mine = " ".join(content_words(question))
+        ranked = sorted(zip(scored, self._queries, strict=True), key=lambda x: -x[0])
+        return [q.question for _, q in ranked if " ".join(content_words(q.question)) != mine][:limit]
+
     def _similarities(self, question: str) -> tuple[list[float], Embedder]:
         for index in (self._preferred, self._lexical):
             if index is None:

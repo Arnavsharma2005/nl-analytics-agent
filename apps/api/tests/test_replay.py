@@ -42,3 +42,12 @@ def test_provider_failures_are_replayed(db, tmp_path):
     recorder.save(tmp_path / "c.json")
     out = Analyst(ReplayLLM(tmp_path / "c.json"), db).ask("Revenue by region")
     assert out.summary is None and len(out.rows) == 6
+
+
+def test_streamed_and_plain_replies_share_one_cassette_entry(tmp_path):
+    recorder = RecordingLLM(FakeLLM(summary="Revenue rose 12%."))
+    assert "".join(recorder.stream_text("You are a business analyst", "Question: q")) == "Revenue rose 12%."
+    recorder.save(tmp_path / "c.json")
+    replay = ReplayLLM(tmp_path / "c.json")
+    assert replay.text("You are a business analyst", "Question: q") == "Revenue rose 12%."
+    assert list(replay.stream_text("You are a business analyst", "Question: q")) == ["Revenue rose 12%."]

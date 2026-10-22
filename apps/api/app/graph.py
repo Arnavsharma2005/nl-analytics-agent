@@ -10,12 +10,13 @@ import time
 from functools import wraps
 from typing import Annotated, Any, TypedDict
 
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.chart import choose_chart
 from app.agents.router import answer_schema_question, route
 from app.agents.sql_agent import write_sql
-from app.agents.summary import summarize
+from app.agents.summary import stream_summary, summarize
 from app.checks import EMPTY_RESULT, looks_empty, unsupported_numbers
 from app.context import Context, ContextPack
 from app.db import DataSource, QueryError
@@ -153,10 +154,27 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     @timed("summary_agent")
     def summary_node(state: AnalyticsState):
         rows, shown = state["rows"], state["rows"][:rows_for_llm]
+        # While streaming, the summary goes out as it is written: {"token": piece} adds to it, {"summary": text}
+        # replaces all of it (a rewrite, or a provider that failed part-way).
+        emit = get_stream_writer()
 
-        def write(unsupported=None):
-            return summarize(llm, state["question"], state["columns"], shown, len(rows), state.get("truncated", False),
-                             unsupported)
+        def write(unsupported=None) -> str:
+            args = (llm, state["question"], state["columns"], shown, len(rows), state.get("truncated", False),
+                    unsupported)
+            if unsupported:
+                emit({"summary": ""})
+            parts = []
+            try:
+                for piece in stream_summary(*args):
+                    parts.append(piece)
+                    emit({"token": piece})
+            except AllProvidersFailed:
+                if not parts:
+                    raise
+                text = summarize(*args)  # start again, whole, with whichever provider is left
+                emit({"summary": text})
+                return text
+            return "".join(parts).strip()
 
         try:
             text = write()
