@@ -39,6 +39,8 @@ jobs:
       - name: Unit and integration tests (scripted LLM, real Postgres)
         working-directory: apps/api
         run: python -m pytest -q
+      - name: The web app's copy of the OpenAPI spec is up to date
+        run: python apps/api/scripts/export_openapi.py --check
       - name: Every gold query in the eval set runs
         run: python eval/run_eval.py --gold-only
       - name: Replay the recorded eval run; fail if any question regressed
@@ -61,6 +63,34 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  web-next:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web-next
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/web-next/package-lock.json
+            apps/web-next/tools/package-lock.json
+      - run: npm ci
+      - name: Types generated from the OpenAPI spec are up to date
+        run: npm run gen:api && git diff --exit-code src/api/schema.d.ts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Browser tests (mocked API) with accessibility checks
+        run: npx playwright test
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web-next/test-results/
+          retention-days: 7
 
   secrets:
     runs-on: ubuntu-latest

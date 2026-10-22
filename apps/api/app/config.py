@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # Header holding the real client IP when behind a proxy, e.g. true-client-ip on Render (which sits behind
     # Cloudflare). Unset means the connecting address.
     client_ip_header: str | None = None
+    # Shared with the web app's proxy (apps/web-next/functions). A request carrying it in X-Proxy-Secret came
+    # through the proxy, so its X-Client-IP header is the visitor's address. Unset, X-Client-IP is ignored.
+    proxy_secret: str | None = None
     # Questions per visitor session per hour, and per IP address per day. 0 turns a limit off.
     quota_session_per_hour: int = 30
     quota_ip_per_day: int = 300

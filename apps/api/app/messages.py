@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -24,6 +24,9 @@ log = logging.getLogger(__name__)
 
 class MessageV1(BaseModel):
     """One question in a conversation and its answer."""
+
+    # Responses always carry every field, so the OpenAPI schema marks them required for generated clients.
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
 
     id: UUID
     conversation_id: UUID

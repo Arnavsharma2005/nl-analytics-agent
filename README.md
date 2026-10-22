@@ -91,6 +91,25 @@ npm run dev                        # UI on http://localhost:5173
 
 Or run everything in containers: `docker compose up --build`, then open http://localhost:8000.
 
+### The new web app
+
+`apps/web-next` is the v2 frontend, built on the `/v1` API. It will replace `apps/web` once it is deployed. It uses
+React 19, Tailwind, TanStack Query and ECharts (loaded only when the first chart is drawn), with types generated
+from the API's OpenAPI spec. Answers stream in, with each figure in the summary marked and a chart beside it.
+"How this was answered" shows the steps, timings, models, failed tries, the SQL and a plain-English
+explanation. You can also rate answers, download the CSV or chart, ask by voice, and pick from suggested
+follow-up questions.
+
+```bash
+cd apps/web-next
+npm ci
+npm run dev                        # http://localhost:5173, forwarding /v1 to the API on :8000
+npm run build && npx playwright test   # browser tests against a mocked API, with axe accessibility checks
+```
+
+After changing an API response model: `python apps/api/scripts/export_openapi.py`, then `npm run gen:api` in
+`apps/web-next`. CI fails if either is out of date.
+
 ## API
 
 Errors are [problem details](docs/errors.md) with a stable `code` to branch on.
@@ -255,7 +274,8 @@ apps/api/
   app/main.py     FastAPI app (also serves the built frontend)
   app/seed.py     sample dataset
   tests/
-apps/web/         React + Vite + Recharts
+apps/web/         React + Vite + Recharts (the current frontend)
+apps/web-next/    the v2 frontend on /v1; functions/ is the Cloudflare Pages proxy, e2e/ the browser tests
 eval/             questions.yaml, run_eval.py, compare.py, results/ (run history), baseline/ (replay cassette)
 PRD.md            product requirements
 ```

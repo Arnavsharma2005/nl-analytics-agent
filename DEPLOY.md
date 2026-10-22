@@ -119,6 +119,25 @@ To change a key later, edit it under **Variables**. Railway redeploys automatica
 The free web service sleeps after 15 minutes without traffic, so the first request after that takes about a minute.
 Render deletes free databases 30 days after creation unless you upgrade.
 
+## Deploy the new web app on Cloudflare Pages (free)
+
+`apps/web-next` is a static site, plus a small Pages Function that forwards `/v1/*` and `/healthz` to the API.
+Because the browser only ever talks to the Pages domain, the session cookie stays first-party and no CORS is
+needed.
+
+1. In the Cloudflare dashboard, go to **Workers & Pages** → **Create** → **Pages** → **Connect to Git**, and pick
+   this repo.
+2. Build settings: framework preset **None**, root directory `apps/web-next`, build command `npm ci && npm run build`,
+   output directory `dist`.
+3. Under **Settings** → **Variables and Secrets**, add:
+   - `API_ORIGIN`: the API's URL, e.g. `https://nl-analytics-agent.onrender.com`
+   - `PROXY_SECRET` (as a secret): a long random value, e.g. from `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+4. On the API (Render or Railway), set `PROXY_SECRET` to the same value. Without it, every visitor arrives from
+   Cloudflare's IP addresses and shares one per-IP quota.
+5. Deploy, then open the `pages.dev` URL. `/healthz` on that domain should return the API's `{"status":"ok"}`.
+
+If the Turnstile bot check is on, add the Pages domain to the widget's hostnames in the Turnstile dashboard.
+
 ## 4. Change the frontend after deploying
 
 The frontend is in `apps/web/src` (React + Vite). Work on it locally:
