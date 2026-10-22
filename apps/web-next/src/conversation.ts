@@ -2,9 +2,9 @@
  * A conversation: the questions asked on this page and their answers, built up as each answer streams in.
  *
  * `useConversation()` is the one thing the UI needs: the turns so far, `ask(question)`, `retry(turn)`, `reset()`,
- * `open(id, messages, subject)` to carry on an earlier conversation, and `begin(subject)` to start asking about an
- * uploaded file (or the demo data again). Streaming, retries and cancelling a question when the conversation
- * changes all happen in here.
+ * `open(id, messages, subject)` to carry on an earlier conversation, `begin(subject)` to start asking about an
+ * uploaded file (or the demo data again), and `refreshed(dataset)` when that file has been imported again.
+ * Streaming, retries and cancelling a question when the conversation changes all happen in here.
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ask as send } from "./api/ask";
@@ -153,8 +153,13 @@ export function useConversation() {
     dispatch({ type: "load", turns: messages.map(fromMessage) });
   }, [switchTo]);
 
+  /** Use a newer copy of the file being asked about (a refreshed sheet), carrying on the same conversation. */
+  const refreshed = useCallback((d: Dataset) => {
+    setSubject((s) => (s && s !== "gone" && s.id === d.id ? d : s));
+  }, []);
+
   return {
-    turns, conversationId, subject, ask, retry, reset, begin, open,
+    turns, conversationId, subject, ask, retry, reset, begin, open, refreshed,
     busy: turns.some((t) => t.status === "streaming"),
   };
 }

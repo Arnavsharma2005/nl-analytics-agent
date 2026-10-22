@@ -156,6 +156,8 @@ app. The full schema is at `/docs` while the app runs.
 | `GET`, `DELETE` | `/v1/shares/{id}` | A shared answer (anyone with the link), or stop sharing it (its owner) |
 | `POST` | `/v1/transcribe` | Multipart `audio` (webm, ogg, mp4, mpeg, wav or m4a, up to 2 MB) → `{"text": "..."}`, with Whisper on Groq; the key stays on the server |
 | `POST` | `/v1/datasets` | Multipart `file`: a CSV file → its id, table and column names, row count, a profile of each column (personal ones marked) and three suggested questions. Ask about it by adding `"dataset_id"` to a question. It counts as a question against the limits; you can keep 3 at a time, for a day |
+| `POST` | `/v1/datasets/sheets` | `{"url"}`: a Google Sheets link shared with "Anyone with the link" → imported like an uploaded CSV file (same limits and profile). The link's `#gid` picks the tab; otherwise the first |
+| `POST` | `/v1/datasets/{id}/refresh` | Import an imported sheet again, keeping its id and conversations, for another day |
 | `GET` | `/v1/datasets` | Your uploaded files that haven't expired |
 | `GET`, `DELETE` | `/v1/datasets/{id}` | One of your uploaded files, or delete it now |
 | `GET` | `/v1/conversations` | Your recent conversations (signed in: from every device, kept 90 days; otherwise this session's) |

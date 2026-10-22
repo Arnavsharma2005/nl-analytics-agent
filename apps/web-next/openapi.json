@@ -603,6 +603,18 @@
             "title": "Rows",
             "type": "integer"
           },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Google Sheets link it was imported from, if any; POST /v1/datasets/{id}/refresh imports it again.",
+            "title": "Source"
+          },
           "suggestions": {
             "items": {
               "type": "string"
@@ -622,6 +634,7 @@
           "rows",
           "columns",
           "suggestions",
+          "source",
           "created_at",
           "expires_at"
         ],
@@ -876,6 +889,21 @@
           "expires_at"
         ],
         "title": "ShareV1",
+        "type": "object"
+      },
+      "SheetV1": {
+        "properties": {
+          "url": {
+            "description": "A Google Sheets link, shared with \"Anyone with the link\". A #gid=... part picks the tab; otherwise the first tab.",
+            "maxLength": 500,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "SheetV1",
         "type": "object"
       },
       "TranscriptV1": {
@@ -1488,6 +1516,48 @@
         ]
       }
     },
+    "/v1/datasets/sheets": {
+      "post": {
+        "description": "Import a Google Sheet shared by link, as if its tab were an uploaded CSV file (same limits, kept for a\nday). Only Google's own hosts are contacted.",
+        "operationId": "import_sheet_v1_datasets_sheets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SheetV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Sheet",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/v1/datasets/{dataset_id}": {
       "delete": {
         "operationId": "delete_dataset_v1_datasets__dataset_id__delete",
@@ -1560,6 +1630,50 @@
           }
         },
         "summary": "Get Dataset",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/datasets/{dataset_id}/refresh": {
+      "post": {
+        "description": "Import an imported sheet again, keeping the dataset's id (and its conversations) and another day.",
+        "operationId": "refresh_v1_datasets__dataset_id__refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh",
         "tags": [
           "v1"
         ]

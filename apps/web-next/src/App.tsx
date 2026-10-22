@@ -6,7 +6,7 @@ import Account, { SignInNotice } from "./components/Account";
 import AnswerView from "./components/AnswerView";
 import Brand from "./components/Brand";
 import Composer from "./components/Composer";
-import { DatasetBar, UploadButton, YourUploads } from "./components/Datasets";
+import { DatasetBar, SheetImport, UploadButton, YourUploads } from "./components/Datasets";
 import Inspector from "./components/Inspector";
 import ServerStatus from "./components/ServerStatus";
 import { useConversation, type Turn } from "./conversation";
@@ -82,7 +82,7 @@ function InspectorPanel({ turn, onClose, docked }: { turn: Turn; onClose: () => 
 }
 
 export default function App() {
-  const { turns, conversationId, subject, ask, retry, reset, begin, open, busy } = useConversation();
+  const { turns, conversationId, subject, ask, retry, reset, begin, open, refreshed, busy } = useConversation();
   const config = useQuery({ queryKey: ["config"], queryFn: getConfig, staleTime: Infinity });
   const [inspected, setInspected] = useState<string | null>(null);
   const wide = useMedia("(min-width: 1100px)");
@@ -133,7 +133,7 @@ export default function App() {
           <ServerStatus />
           <SignInNotice />
           <div className="flex-1">
-            {subject && <DatasetBar dataset={subject} onLeave={() => switchData(null)} />}
+            {subject && <DatasetBar dataset={subject} onLeave={() => switchData(null)} onRefreshed={refreshed} />}
             {turns.length === 0 && subject && subject !== "gone" ? (
               <Starters
                 title={`What do you want to know about ${subject.name}?`}
@@ -153,6 +153,7 @@ export default function App() {
                     <h3 className="font-semibold text-ink">Or ask about your own data</h3>
                     <p className="mt-1 mb-4 max-w-[60ch] text-muted">Upload a spreadsheet saved as CSV, with a heading row, and ask about it the same way.</p>
                     <UploadButton maxMb={config.data.upload_max_mb} onUploaded={switchData} />
+                    <SheetImport onImported={switchData} />
                     <YourUploads current={null} onPick={switchData} />
                   </div>
                 )}
