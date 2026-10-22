@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy import text
 
+from app.analyst import Analyst, Answer, Done, Step
 from app.config import get_settings
 from app.db import Database
-from app.graph import build_graph, to_response
 from app.llm import AllProvidersFailed, FallbackLLM
 from app.providers import build_llm
 
@@ -26,19 +26,6 @@ EXAMPLES = [
     "Average order value by customer segment",
     "Who are our top 5 customers by lifetime revenue?",
 ]
-
-STEP_LABELS = {
-    "router": "Understanding the question",
-    "sql_agent": "Writing SQL",
-    "validate": "Checking the query against the schema",
-    "execute": "Running the query",
-    "chart_agent": "Choosing a chart",
-    "summary_agent": "Writing the insight",
-    "schema_answer": "Describing the data",
-    "out_of_scope": "Done",
-    "give_up": "Stopped",
-}
-
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=500)
@@ -57,12 +44,12 @@ def get_llm() -> FallbackLLM:
 
 
 @lru_cache
-def get_graph():
+def get_analyst() -> Analyst:
     s = get_settings()
-    return build_graph(get_llm(), get_db(), s.max_sql_attempts, s.rows_for_llm)
+    return Analyst(get_llm(), get_db(), max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm)
 
 
-def create_app(graph_factory=get_graph, db_factory=get_db, llm_factory=get_llm) -> FastAPI:
+def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_llm) -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="NL Business Analytics Agent")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
@@ -97,24 +84,20 @@ def create_app(graph_factory=get_graph, db_factory=get_db, llm_factory=get_llm) 
         ]
 
     @app.post("/api/ask")
-    def ask(req: AskRequest):
-        state = graph_factory().invoke({"question": req.question.strip()})
-        return to_response(state)
+    def ask(req: AskRequest) -> Answer:
+        return analyst_factory().ask(req.question)
 
     @app.post("/api/ask/stream")
     async def ask_stream(req: AskRequest):
-        graph = graph_factory()
+        analyst = analyst_factory()
 
         async def events():
-            final = None
             try:
-                async for mode, chunk in graph.astream({"question": req.question.strip()}, stream_mode=["updates", "values"]):
-                    if mode == "updates":
-                        for node in chunk:
-                            yield {"event": "step", "data": json.dumps({"node": node, "label": STEP_LABELS.get(node, node)})}
-                    else:
-                        final = chunk
-                yield {"event": "result", "data": json.dumps(to_response(final or {}), default=str)}
+                async for event in analyst.stream(req.question):
+                    if isinstance(event, Step):
+                        yield {"event": "step", "data": json.dumps({"node": event.node, "label": event.label})}
+                    elif isinstance(event, Done):
+                        yield {"event": "result", "data": event.answer.model_dump_json()}
             except Exception as e:  # noqa: BLE001 - report to the client instead of dropping the stream
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
 

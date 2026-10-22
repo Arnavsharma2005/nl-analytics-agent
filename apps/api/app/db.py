@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Protocol
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
@@ -65,6 +66,22 @@ class QueryResult:
 
 class QueryError(Exception):
     """The database rejected or failed to run a query."""
+
+
+class DataSource(Protocol):
+    """What the analyst needs from a database it can query."""
+
+    def schema(self) -> Schema:
+        """The tables the model may query, with comments and small value lists. Cached after the first call."""
+        ...
+
+    def explain(self, sql: str) -> None:
+        """Plan a query without running it; raise QueryError with the database's message if it would fail."""
+        ...
+
+    def run(self, sql: str) -> QueryResult:
+        """Run a read-only query with a timeout and a row cap; raise QueryError on failure."""
+        ...
 
 
 def _jsonable(value):

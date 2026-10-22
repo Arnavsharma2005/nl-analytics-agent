@@ -11,7 +11,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Protocol, TypeVar
+from typing import Callable, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel, ValidationError
 
@@ -22,6 +22,15 @@ class LLM(Protocol):
     def structured(self, output: type[T], system: str, user: str) -> T: ...
 
     def text(self, system: str, user: str) -> str: ...
+
+
+@runtime_checkable
+class CallLogging(Protocol):
+    """An LLM that records which provider served each call, per thread, between start_log and take_log."""
+
+    def start_log(self) -> None: ...
+
+    def take_log(self) -> list[dict]: ...
 
 
 @dataclass
