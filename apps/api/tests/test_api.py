@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.agents.chart import ChartSpec
 from app.analyst import Analyst
+from app.config import get_settings
 from app.main import create_app
 
 from .conftest import FakeLLM
@@ -21,6 +22,24 @@ def test_health_schema_examples(db):
     tables = {t["table"] for t in c.get("/api/schema").json()}
     assert tables == {"regions", "customers", "categories", "products", "orders", "order_items"}
     assert len(c.get("/api/examples").json()) >= 5
+
+
+def test_healthz_never_touches_the_database(monkeypatch):
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "abc123")
+    get_settings.cache_clear()
+    try:
+        def no_db():
+            raise AssertionError("/healthz must not open a database connection")
+
+        c = TestClient(create_app(analyst_factory=no_db, db_factory=no_db))
+        assert c.get("/healthz").json() == {"status": "ok", "commit": "abc123"}
+        assert c.get("/readyz").status_code == 503
+    finally:
+        get_settings.cache_clear()
+
+
+def test_readyz(db):
+    assert client(db).get("/readyz").json() == {"status": "ok"}
 
 
 def test_ask(db):

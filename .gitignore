@@ -5,5 +5,5 @@ __pycache__/
 node_modules/
 apps/web/dist/
 *.tsbuildinfo
-eval/results.json
 .pytest_cache/
+.ruff_cache/

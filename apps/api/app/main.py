@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sse_starlette.sse import EventSourceResponse
 from sqlalchemy import text
+from sse_starlette.sse import EventSourceResponse
 
 from app.analyst import Analyst, Answer, Done, Step
 from app.config import get_settings
@@ -54,8 +54,16 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
     app = FastAPI(title="NL Business Analytics Agent")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
 
+    @app.get("/healthz")
+    def healthz():
+        """Liveness for uptime pings and the host's health check. Never touches the database, so a serverless
+        database can still suspend while the app is idle."""
+        return {"status": "ok", "commit": settings.git_commit}
+
+    @app.get("/readyz")
     @app.get("/api/health")
-    def health():
+    def readyz():
+        """Readiness: the database answers."""
         try:
             with db_factory().engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
