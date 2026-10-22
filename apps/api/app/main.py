@@ -18,12 +18,14 @@ from app import semantic
 from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
 from app.api_auth import auth_router, is_https, signed_in_user
+from app.api_curator import curator_router
 from app.api_datasets import datasets_router
 from app.api_shares import shares_router
 from app.api_v1 import v1_router
 from app.auth import GitHub, Users
 from app.config import get_settings
 from app.context import Context
+from app.curation import Curation, LibraryPR
 from app.datasets.csv_upload import Limits
 from app.datasets.registry import DatasetAnalysts
 from app.datasets.sheets import SheetsClient
@@ -142,6 +144,19 @@ def get_github() -> GitHub | None:
 
 
 @lru_cache
+def get_curation() -> Curation:
+    return Curation(get_app_engine(), semantic.load())
+
+
+@lru_cache
+def get_library_pr() -> LibraryPR | None:
+    s = get_settings()
+    if not (s.curator_github_token and s.curator_repo):
+        return None
+    return LibraryPR(s.curator_github_token, s.curator_repo, s.curator_base_branch)
+
+
+@lru_cache
 def get_suggester() -> Context:
     # Follow-up suggestions compare questions by their words: no embedding call per answer.
     return Context(semantic.load(), get_db().schema())
@@ -159,7 +174,8 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                quota_factory=get_quota, messages_factory=get_messages, suggester_factory=get_suggester,
                transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github,
                datasets_factory=get_datasets, dataset_analysts_factory=get_dataset_analysts,
-               shares_factory=get_shares, sheets_factory=SheetsClient) -> FastAPI:
+               shares_factory=get_shares, sheets_factory=SheetsClient, curation_factory=get_curation,
+               library_pr_factory=get_library_pr) -> FastAPI:
     settings = get_settings()
 
     @asynccontextmanager
@@ -232,10 +248,19 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         for kept in (messages_factory(), datasets_factory(), shares_factory()):
             kept.adopt(session, owner)
 
+    curators = {login.lower() for login in settings.curators}
+
+    def login(user_id: int) -> str | None:
+        user = users_factory().get(user_id)
+        return user.login if user else None
+
     app.include_router(auth_router(
         sessions=sessions_factory, github=github_factory, users=users_factory, adopt=adopt,
         public_url=settings.public_url, user_session_days=settings.user_session_days,
+        is_curator=lambda name: name.lower() in curators,
     ))
+    app.include_router(curator_router(curation=curation_factory, library_pr=library_pr_factory, identify=identify,
+                                      login=login, curators=curators))
 
     @app.get("/api/config")
     def config():

@@ -313,6 +313,69 @@
         "title": "Body_upload_v1_datasets_post",
         "type": "object"
       },
+      "CandidateV1": {
+        "description": "An answer rated thumbs up, waiting for a curator.",
+        "properties": {
+          "asked": {
+            "description": "The question as it was typed.",
+            "title": "Asked",
+            "type": "string"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the person who rated it said, if anything.",
+            "title": "Comment"
+          },
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "question": {
+            "description": "The question as it was understood: a follow-up written out in full.",
+            "title": "Question",
+            "type": "string"
+          },
+          "rated_at": {
+            "format": "date-time",
+            "title": "Rated At",
+            "type": "string"
+          },
+          "sql": {
+            "title": "Sql",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "message_id",
+          "question",
+          "asked",
+          "sql",
+          "summary",
+          "comment",
+          "rated_at"
+        ],
+        "title": "CandidateV1",
+        "type": "object"
+      },
       "ChartSpec": {
         "properties": {
           "series": {
@@ -570,6 +633,96 @@
         "title": "ConversationV1",
         "type": "object"
       },
+      "CuratedV1": {
+        "description": "A curator's decision on an answer.",
+        "properties": {
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "pr_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The pull request it was exported in; none until then.",
+            "title": "Pr Url"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "reviewed_at": {
+            "format": "date-time",
+            "title": "Reviewed At",
+            "type": "string"
+          },
+          "reviewer": {
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "sql": {
+            "title": "Sql",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "status",
+          "question",
+          "sql",
+          "reviewer",
+          "reviewed_at",
+          "pr_url"
+        ],
+        "title": "CuratedV1",
+        "type": "object"
+      },
+      "CuratorV1": {
+        "properties": {
+          "approved": {
+            "description": "Approved answers not yet exported to the library.",
+            "items": {
+              "$ref": "#/components/schemas/CuratedV1"
+            },
+            "title": "Approved",
+            "type": "array"
+          },
+          "can_open_pr": {
+            "description": "Whether exporting opens a pull request (CURATOR_GITHUB_TOKEN is set); otherwise copy the YAML from GET /v1/curator/export.yml.",
+            "title": "Can Open Pr",
+            "type": "boolean"
+          },
+          "queue": {
+            "description": "Answers rated thumbs up, waiting for a decision.",
+            "items": {
+              "$ref": "#/components/schemas/CandidateV1"
+            },
+            "title": "Queue",
+            "type": "array"
+          }
+        },
+        "required": [
+          "queue",
+          "approved",
+          "can_open_pr"
+        ],
+        "title": "CuratorV1",
+        "type": "object"
+      },
       "DatasetV1": {
         "description": "An uploaded file, ready for questions.",
         "properties": {
@@ -655,6 +808,25 @@
           "steps"
         ],
         "title": "ExplanationV1",
+        "type": "object"
+      },
+      "ExportV1": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "url": {
+            "description": "The pull request that adds them to semantic/queries.yml.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "count"
+        ],
+        "title": "ExportV1",
         "type": "object"
       },
       "Failure": {
@@ -824,6 +996,37 @@
         "title": "MessageV1",
         "type": "object"
       },
+      "ReviewV1": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Approve under this wording instead of the question as understood.",
+            "title": "Question"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "ReviewV1",
+        "type": "object"
+      },
       "SessionRequest": {
         "properties": {
           "turnstile_token": {
@@ -932,6 +1135,12 @@
             ],
             "title": "Avatar Url"
           },
+          "curator": {
+            "default": false,
+            "description": "Whether they may use the Curator (/curator).",
+            "title": "Curator",
+            "type": "boolean"
+          },
           "login": {
             "title": "Login",
             "type": "string"
@@ -951,7 +1160,8 @@
         "required": [
           "login",
           "name",
-          "avatar_url"
+          "avatar_url",
+          "curator"
         ],
         "title": "UserV1",
         "type": "object"
@@ -1445,6 +1655,126 @@
           }
         },
         "summary": "Ask",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/curator": {
+      "get": {
+        "description": "The review queue, and what is approved but not yet in the library.",
+        "operationId": "overview_v1_curator_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuratorV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Overview",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/curator/export": {
+      "post": {
+        "description": "Open a draft pull request adding the approved answers to semantic/queries.yml, where CI checks them.",
+        "operationId": "export_v1_curator_export_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/curator/export.yml": {
+      "get": {
+        "description": "The approved answers as entries to paste at the end of semantic/queries.yml.",
+        "operationId": "export_yaml_v1_curator_export_yml_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Yaml",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/curator/{message_id}": {
+      "post": {
+        "description": "Approve or reject a queued answer. Approving keeps it for the next export; nothing changes what the\nanalyst does until that pull request is merged.",
+        "operationId": "review_v1_curator__message_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuratedV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review",
         "tags": [
           "v1"
         ]

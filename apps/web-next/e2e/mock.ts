@@ -1,6 +1,6 @@
 /** A fake API for the browser tests: answers /v1 and /healthz from fixtures, and records what the page sent. */
 import type { Page, Route } from "@playwright/test";
-import type { ConversationSummary, Dataset, Message, Share, StreamEvents, User } from "../src/api/types";
+import type { Candidate, ConversationSummary, CuratorOverview, Dataset, Message, Share, StreamEvents, User } from "../src/api/types";
 
 export const STARTERS = ["Revenue by region", "Monthly revenue trend in 2025", "Top 5 products by revenue"];
 
@@ -60,6 +60,19 @@ export const SALES_CSV: Dataset = {
   expires_at: new Date(Date.now() + 86_400_000).toISOString(),
 };
 
+export const ARNAV: User = { login: "arnav", name: "Arnav", avatar_url: null, curator: false };
+
+/** An answer rated thumbs up, waiting in the Curator. */
+export const CANDIDATE: Candidate = {
+  message_id: "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+  question: "How many customers signed up in each region in 2025?",
+  asked: "and by region?",
+  sql: "SELECT r.name AS region, COUNT(*) AS customers\nFROM customers c JOIN regions r USING (region_id)\nGROUP BY r.name",
+  summary: "North signed up the most customers.",
+  comment: "Exactly what I needed",
+  rated_at: "2026-10-22T09:30:00Z",
+};
+
 export const SHEET_URL = "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit#gid=0";
 
 /** An imported Google Sheet, as the API returns it. */
@@ -116,6 +129,10 @@ export interface Api {
   importSheet: (url: string) => { status: number; body: unknown };
   refreshed: string[];
   refresh: (dataset: Dataset) => { status: number; body: unknown };
+  /** What the Curator shows (null: not a curator), the decisions sent, and how exporting is answered. */
+  curator: CuratorOverview | null;
+  reviews: { id: string; decision: string; question?: string }[];
+  exportPr: () => { status: number; body: unknown };
   /** Shared answers by link id, and the message ids that were shared. */
   shares: Record<string, Share>;
   shared: string[];
@@ -139,6 +156,9 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     refresh: (d) => ({ status: 200, body: { ...d, rows: d.rows + 10 } }),
     shares: {},
     shared: [],
+    curator: null,
+    reviews: [],
+    exportPr: () => ({ status: 200, body: { url: "https://github.com/arnav/nl-analytics-agent/pull/31", count: 1 } }),
     ...overrides,
   };
   const json = (route: Route, body: unknown, status = 200) =>
@@ -212,6 +232,30 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     const r = api.refresh(found);
     if (r.status < 400) api.datasets = api.datasets.map((d) => (d.id === id ? (r.body as Dataset) : d));
     return json(route, r.body, r.status);
+  });
+  const notCurator = { status: 403, code: "not_a_curator", title: "Only curators can see this" };
+  await page.route("**/v1/curator", (route) => (api.curator ? json(route, api.curator) : json(route, notCurator, 403)));
+  await page.route("**/v1/curator/*", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/")[3];
+    const c = api.curator;
+    if (!c) return json(route, notCurator, 403);
+    if (id === "export.yml") {
+      const yaml = c.approved.map((a) => `  - question: ${a.question}\n    verified_by: ${a.reviewer}\n`).join("\n");
+      return route.fulfill({ status: 200, contentType: "text/plain", body: yaml });
+    }
+    if (id === "export") {
+      const r = api.exportPr();
+      if (r.status < 400) c.approved = [];
+      return json(route, r.body, r.status);
+    }
+    const body = route.request().postDataJSON();
+    api.reviews.push({ id, ...body });
+    const found = c.queue.find((q) => q.message_id === id)!;
+    c.queue = c.queue.filter((q) => q !== found);
+    const curated = { message_id: id, status: body.decision === "approve" ? "approved" : "rejected", question: body.question ?? found.question,
+      sql: found.sql, reviewer: "arnav", reviewed_at: new Date().toISOString(), pr_url: null } as const;
+    if (body.decision === "approve") c.approved = [...c.approved, curated];
+    return json(route, curated);
   });
   await page.route("**/v1/messages/*/share", (route) => {
     const id = new URL(route.request().url()).pathname.split("/")[3];

@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth import Attempt, GitHub, SignInFailed, Users
 from app.problems import Problem
@@ -28,6 +28,7 @@ class UserV1(BaseModel):
     login: str
     name: str | None
     avatar_url: str | None
+    curator: bool = Field(default=False, description="Whether they may use the Curator (/curator).")
 
 
 class MeV1(BaseModel):
@@ -47,9 +48,10 @@ def signed_in_user(sessions: Sessions, request: Request) -> int | None:
 
 
 def auth_router(*, sessions: Callable[[], Sessions], github: Callable[[], GitHub | None], users: Callable[[], Users],
-                adopt: Callable[[str, str], None], public_url: str | None, user_session_days: int) -> APIRouter:
+                adopt: Callable[[str, str], None], public_url: str | None, user_session_days: int,
+                is_curator: Callable[[str], bool] = lambda login: False) -> APIRouter:
     """`adopt(session, owner)` gives what an anonymous session owned (messages, uploads, shares) to the user who
-    just signed in from it."""
+    just signed in from it; `is_curator(login)` says who may use the Curator."""
     router = APIRouter(prefix="/v1", tags=["v1"])
 
     def site(request: Request) -> str:
@@ -112,6 +114,9 @@ def auth_router(*, sessions: Callable[[], Sessions], github: Callable[[], GitHub
         """Who is signed in, if anyone."""
         user_id = signed_in_user(sessions(), request)
         user = users().get(user_id) if user_id else None
-        return MeV1(user=UserV1(login=user.login, name=user.name, avatar_url=user.avatar_url) if user else None)
+        if user is None:
+            return MeV1(user=None)
+        return MeV1(user=UserV1(login=user.login, name=user.name, avatar_url=user.avatar_url,
+                                curator=is_curator(user.login)))
 
     return router

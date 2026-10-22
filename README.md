@@ -154,6 +154,9 @@ app. The full schema is at `/docs` while the app runs.
 | `POST` | `/v1/messages/{id}/explain` | The answer's SQL as plain-English steps (one model call, then kept) |
 | `POST` | `/v1/messages/{id}/share` | Share one of your answers: a read-only snapshot at `/s/{id}` that anyone with the link can open without signing in. Nothing is run again when it is opened; the same answer always gets the same link; links last 90 days |
 | `GET`, `DELETE` | `/v1/shares/{id}` | A shared answer (anyone with the link), or stop sharing it (its owner) |
+| `GET` | `/v1/curator` | Curators only (`CURATORS`): answers rated thumbs up waiting for review, and approvals not yet in the library |
+| `POST` | `/v1/curator/{message_id}` | `{"decision": "approve" \| "reject", "question"?}`: approve an answer as a verified query (optionally reworded), or reject it |
+| `POST`, `GET` | `/v1/curator/export`, `/v1/curator/export.yml` | Open a draft pull request adding the approvals to `semantic/queries.yml` (needs `CURATOR_GITHUB_TOKEN`), or get them as YAML to paste |
 | `POST` | `/v1/transcribe` | Multipart `audio` (webm, ogg, mp4, mpeg, wav or m4a, up to 2 MB) → `{"text": "..."}`, with Whisper on Groq; the key stays on the server |
 | `POST` | `/v1/datasets` | Multipart `file`: a CSV file → its id, table and column names, row count, a profile of each column (personal ones marked) and three suggested questions. Ask about it by adding `"dataset_id"` to a question. It counts as a question against the limits; you can keep 3 at a time, for a day |
 | `POST` | `/v1/datasets/sheets` | `{"url"}`: a Google Sheets link shared with "Anyone with the link" → imported like an uploaded CSV file (same limits and profile). The link's `#gid` picks the tab; otherwise the first |
