@@ -80,6 +80,17 @@
             "title": "Columns",
             "type": "array"
           },
+          "confidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Confidence"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the answer was reached and, once a model is trained, how likely it is to be right (app/confidence.py). Only for answered data questions."
+          },
           "error": {
             "anyOf": [
               {
@@ -239,7 +250,8 @@
           "assumptions",
           "summary_verified",
           "standalone_question",
-          "analysis"
+          "analysis",
+          "confidence"
         ],
         "title": "Answer",
         "type": "object"
@@ -550,6 +562,59 @@
           "personal"
         ],
         "title": "ColumnV1",
+        "type": "object"
+      },
+      "Confidence": {
+        "description": "An answer's signals and, once a model is trained, how likely it is to be right.",
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which trained model scored it.",
+            "title": "Model"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calibrated chance the answer is right.",
+            "title": "Probability"
+          },
+          "signals": {
+            "$ref": "#/components/schemas/Signals"
+          }
+        },
+        "required": [
+          "signals"
+        ],
+        "title": "Confidence",
         "type": "object"
       },
       "ConfigV1": {
@@ -1121,6 +1186,109 @@
           "url"
         ],
         "title": "SheetV1",
+        "type": "object"
+      },
+      "Signals": {
+        "description": "What the pipeline knows about how an answer was reached.",
+        "properties": {
+          "assumptions": {
+            "description": "Readings of an ambiguous question the SQL agent chose.",
+            "title": "Assumptions",
+            "type": "integer"
+          },
+          "attempts": {
+            "description": "Queries the SQL agent wrote.",
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "empty_result": {
+            "description": "No rows, or nothing but NULLs.",
+            "title": "Empty Result",
+            "type": "boolean"
+          },
+          "empty_retries": {
+            "description": "Queries sent back because they found nothing.",
+            "title": "Empty Retries",
+            "type": "integer"
+          },
+          "failed_runs": {
+            "description": "Queries that failed when run.",
+            "title": "Failed Runs",
+            "type": "integer"
+          },
+          "follow_up": {
+            "description": "The question was rewritten using earlier turns of its conversation.",
+            "title": "Follow Up",
+            "type": "boolean"
+          },
+          "invalid_attempts": {
+            "description": "Queries refused by the guard or the planner.",
+            "title": "Invalid Attempts",
+            "type": "integer"
+          },
+          "joins": {
+            "title": "Joins",
+            "type": "integer"
+          },
+          "nearest_example": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Similarity (0 to 1) of the closest verified example the SQL agent was shown; None when context retrieval is off.",
+            "title": "Nearest Example"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "subqueries": {
+            "title": "Subqueries",
+            "type": "integer"
+          },
+          "summary_checked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Every figure in the summary was found in the result (None: not checked).",
+            "title": "Summary Checked"
+          },
+          "verified": {
+            "description": "A verified query answered the question as written.",
+            "title": "Verified",
+            "type": "boolean"
+          },
+          "window_functions": {
+            "title": "Window Functions",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified",
+          "nearest_example",
+          "attempts",
+          "invalid_attempts",
+          "failed_runs",
+          "empty_retries",
+          "empty_result",
+          "rows",
+          "assumptions",
+          "follow_up",
+          "summary_checked",
+          "joins",
+          "window_functions",
+          "subqueries"
+        ],
+        "title": "Signals",
         "type": "object"
       },
       "TranscriptV1": {
