@@ -34,7 +34,7 @@ def test_a_new_prompt_is_a_miss(db, tmp_path):
 
 def test_provider_failures_are_replayed(db, tmp_path):
     class NoSummary(FakeLLM):
-        def text(self, system, user):
+        def text(self, system, user, tier="strong"):
             raise AllProvidersFailed([{"provider": "x", "error": "rate limited"}])
 
     recorder = RecordingLLM(NoSummary(sql=[REVENUE_BY_REGION]))

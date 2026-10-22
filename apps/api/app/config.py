@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     openrouter_model: str | None = None
     mistral_model: str | None = None
     cloudflare_model: str | None = None
+    # Optional cheaper, higher-quota models for the light steps (routing, chart choice), e.g.
+    # GROQ_FAST_MODEL=llama-3.1-8b-instant. Unset means the provider uses its main model for every step.
+    gemini_fast_model: str | None = None
+    groq_fast_model: str | None = None
+    openrouter_fast_model: str | None = None
+    mistral_fast_model: str | None = None
+    cloudflare_fast_model: str | None = None
 
     max_sql_attempts: int = 3
     max_result_rows: int = 500

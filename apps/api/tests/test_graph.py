@@ -78,8 +78,14 @@ def test_summary_failure_still_returns_the_chart(db):
     from app.llm import AllProvidersFailed
 
     class NoSummary(FakeLLM):
-        def text(self, system, user):
+        def text(self, system, user, tier="strong"):
             raise AllProvidersFailed([{"provider": "x", "error": "rate limited"}])
 
     out = run(NoSummary(sql=[REVENUE_BY_REGION]), db)
     assert out.error is None and out.summary is None and len(out.rows) == 6
+
+
+def test_light_steps_use_the_fast_tier(db):
+    llm = FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="Revenue"))
+    run(llm, db)
+    assert llm.tiers == [("RouteDecision", "fast"), ("SQLDraft", "strong"), ("ChartSpec", "fast"), ("text", "strong")]

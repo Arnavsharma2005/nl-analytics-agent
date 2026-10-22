@@ -23,9 +23,11 @@ class FakeLLM:
         self.summary = summary
         self.schema_answer = schema_answer
         self.calls: list[tuple[str, str]] = []
+        self.tiers: list[tuple[str, str]] = []
 
-    def structured(self, output: type[BaseModel], system: str, user: str):
+    def structured(self, output: type[BaseModel], system: str, user: str, tier: str = "strong"):
         self.calls.append((output.__name__, user))
+        self.tiers.append((output.__name__, tier))
         if output is RouteDecision:
             return RouteDecision(intent=self.intent, reason="test")
         if output is SQLDraft:
@@ -37,8 +39,9 @@ class FakeLLM:
             return self.chart
         raise AssertionError(f"unexpected structured call {output}")
 
-    def text(self, system: str, user: str) -> str:
+    def text(self, system: str, user: str, tier: str = "strong") -> str:
         self.calls.append(("text", user))
+        self.tiers.append(("text", tier))
         return self.schema_answer if "help business users understand" in system else self.summary
 
 
