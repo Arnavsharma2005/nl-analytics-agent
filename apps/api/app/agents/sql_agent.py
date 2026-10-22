@@ -1,9 +1,9 @@
 from pydantic import BaseModel, Field
 
-from app import semantic
+from app.brief import Brief
 from app.llm import LLM
 
-SYSTEM = """You are an expert PostgreSQL analyst. Write ONE read-only PostgreSQL SELECT query that answers
+SYSTEM = """You are an expert {dialect} analyst. Write ONE read-only {dialect} SELECT query that answers
 the user's question over the schema below.
 
 SCHEMA
@@ -15,7 +15,7 @@ BUSINESS RULES
 STYLE
 - Return human-readable labels (region, category, product or customer names), never bare ids.
 - Give every computed column a short snake_case alias, e.g. revenue, order_count, month.
-- For time series, group by date_trunc('month' | 'quarter' | 'week', order_date)::date and order by it ascending.
+- For time series, group by date_trunc('month' | 'quarter' | 'week', {time_column})::date and order by it ascending.
 - Round money and percentages with ROUND(x::numeric, 2). Use NULLIF to avoid division by zero.
 - For "top N" / "bottom N" questions, ORDER BY the measure and LIMIT N; when no N is given use 10.
 - Use only the tables and columns in the schema. No SELECT *. Do not end with a semicolon."""
@@ -39,11 +39,16 @@ class ContextualSQLDraft(SQLDraft):
     )
 
 
-def write_sql(llm: LLM, question: str, schema_text: str, previous: list[tuple[str, str]],
-              context: str | None = None) -> SQLDraft:
-    """`previous` holds (sql, error) for earlier attempts that failed validation or execution. `context`, when
-    given (even empty), is the question's context from app.context and asks for a `ContextualSQLDraft`."""
-    system = SYSTEM.format(schema=schema_text, rules=semantic.load().rules_text())
+DIALECTS = {"postgres": "PostgreSQL", "duckdb": "DuckDB"}
+
+
+def write_sql(llm: LLM, question: str, schema_text: str, previous: list[tuple[str, str]], brief: Brief,
+              dialect: str = "postgres", context: str | None = None) -> SQLDraft:
+    """`previous` holds (sql, error) for earlier attempts that failed validation or execution. `dialect` is the
+    data source's (see app.db.DataSource). `context`, when given (even empty), is the question's context from
+    app.context and asks for a `ContextualSQLDraft`."""
+    system = SYSTEM.format(dialect=DIALECTS[dialect], schema=schema_text, rules=brief.rules,
+                           time_column=brief.time_column)
     user = f"Question: {question}"
     if context:
         user += f"\n\n{context}"

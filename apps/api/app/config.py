@@ -100,6 +100,19 @@ class Settings(BaseSettings):
     message_retention_days: int = 7
     user_message_retention_days: int = 90
 
+    # --- Uploads: CSV files people ask about instead of the demo data, kept for a day (app/datasets). ---------
+    uploads: bool = True
+    upload_max_mb: int = 5
+    upload_max_rows: int = 200_000
+    upload_max_columns: int = 60
+    upload_ttl_hours: int = 24
+    uploads_per_owner: int = 3
+    # All uploads together, as stored Parquet, so the free database never fills up.
+    uploads_total_mb: int = 200
+    # Uploaded datasets kept open in memory for questions, and the memory each one's queries may use.
+    uploads_open: int = 3
+    upload_query_memory_mb: int = 128
+
     # --- Sign-in with GitHub (optional). Off unless both are set. Create an OAuth app at
     # https://github.com/settings/developers with the callback URL <PUBLIC_URL>/v1/auth/github/callback. ----------
     github_client_id: str | None = None

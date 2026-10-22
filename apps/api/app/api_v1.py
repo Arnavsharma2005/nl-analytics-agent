@@ -23,6 +23,8 @@ from sse_starlette.sse import EventSourceResponse
 from app.agents.explain import explain_sql
 from app.analyst import Analyst, Answer, Chart, Done, Step, Table, Token
 from app.context import Context
+from app.datasets.registry import DatasetAnalysts
+from app.datasets.store import GONE, DatasetV1
 from app.llm import LLM
 from app.messages import ConversationV1, KeyReused, Messages, MessageV1
 from app.problems import Problem, from_exception
@@ -34,6 +36,8 @@ log = logging.getLogger(__name__)
 
 class AskV1(BaseModel):
     question: str = Field(min_length=3, max_length=500)
+    dataset_id: UUID | None = Field(default=None, description="Ask about an uploaded file (POST /v1/datasets) "
+                                                              "instead of the demo's sales data.")
 
 
 class FeedbackV1(BaseModel):
@@ -76,15 +80,17 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
               suggester: Callable[[], Context], transcriber: Callable[[], Transcriber | None],
               identify: Callable[[Request], Visitor], spend: Callable[[Visitor], None],
               turnstile_site_key: Callable[[], str | None], starters: Callable[[], list[str]],
-              sign_in: Callable[[], bool]) -> APIRouter:
+              sign_in: Callable[[], bool], datasets: Callable[[], DatasetAnalysts], uploads: bool) -> APIRouter:
     """`identify` names the visitor (raising if the bot check is missing); `spend` counts one question against
     their quota (raising when it is used up)."""
     router = APIRouter(prefix="/v1", tags=["v1"])
 
-    def suggestions(answer: Answer) -> list[str]:
+    def suggestions(answer: Answer, dataset: DatasetV1 | None) -> list[str]:
+        asked = answer.standalone_question or answer.question
+        if dataset:
+            return [q for q in dataset.suggestions if q != asked][:3]
         if answer.intent != "data_query" or answer.error:
             return starters()[:3]
-        asked = answer.standalone_question or answer.question
         return [q for q in suggester().related(asked) if q != answer.verified_question][:3]
 
     async def store(call, *args):
@@ -100,7 +106,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         """What the web app needs at start-up."""
         return ConfigV1(turnstile_site_key=turnstile_site_key(), starters=starters(),
                         features={"voice": transcriber() is not None, "explain": True, "feedback": True,
-                                  "sign_in": sign_in()})
+                                  "sign_in": sign_in(), "uploads": uploads})
 
     @router.post("/conversations/{conversation_id}/messages", response_model=MessageV1,
                  responses={200: {"content": {"text/event-stream": {}}}})
@@ -116,7 +122,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         store_ok = True
         try:
             state, stored = await asyncio.to_thread(messages().begin, message_id, conversation_id, visitor.owner,
-                                                    question)
+                                                    question, body.dataset_id)
         except KeyReused as e:
             raise Problem(422, "idempotency_key_reused", "This Idempotency-Key was used for another request",
                           "Send a new key for each new question.") from e
@@ -126,29 +132,37 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         if state == "running":
             raise Problem(409, "request_in_progress", "This question is still being answered",
                           "Wait for the first request to finish.", retry_after=5)
+        dataset, chosen = None, None
         if state == "new":
             try:
+                if body.dataset_id:
+                    found = await asyncio.to_thread(datasets().get, body.dataset_id, visitor.owner)
+                    if found is None:
+                        raise Problem(404, *GONE)
+                    dataset, chosen = found
                 spend(visitor)
             except Problem:
                 if store_ok:
                     await store(messages().abandon, message_id)
                 raise
+        chosen = chosen or analyst()
         # Earlier turns let a follow-up ("and last year?") be understood; without them it is asked on its own.
         history = []
         if state == "new" and store_ok:
             history = await store(messages().history, conversation_id, visitor.owner, message_id) or []
 
         async def finish(answer: Answer) -> MessageV1:
-            follow_ups = await asyncio.to_thread(suggestions, answer)
+            follow_ups = await asyncio.to_thread(suggestions, answer, dataset)
             saved = await store(messages().finish, message_id, answer, follow_ups) if store_ok else None
-            return saved or MessageV1(id=message_id, conversation_id=conversation_id, question=question,
-                                      answer=answer, suggestions=follow_ups, created_at=datetime.now(UTC))
+            return saved or MessageV1(id=message_id, conversation_id=conversation_id, dataset_id=body.dataset_id,
+                                      question=question, answer=answer, suggestions=follow_ups,
+                                      created_at=datetime.now(UTC))
 
         if "text/event-stream" not in request.headers.get("accept", ""):
             if stored:
                 return stored
             try:
-                answer = await asyncio.to_thread(analyst().ask, question, history)
+                answer = await asyncio.to_thread(chosen.ask, question, history)
             except Exception:
                 if store_ok:
                     await store(messages().abandon, message_id)
@@ -163,7 +177,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
                 yield _sse("done", stored.model_dump_json())
                 return
             try:
-                async for event in analyst().stream(question, history):
+                async for event in chosen.stream(question, history):
                     if isinstance(event, Step):
                         yield _sse("step", {"node": event.node, "label": event.label})
                     elif isinstance(event, Table):
