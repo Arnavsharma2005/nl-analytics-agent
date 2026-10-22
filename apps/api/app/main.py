@@ -15,13 +15,16 @@ from sse_starlette.sse import EventSourceResponse
 from app import semantic
 from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
+from app.api_v1 import v1_router
 from app.config import get_settings
 from app.context import Context
 from app.db import Database
 from app.llm import FallbackLLM
+from app.messages import Messages
 from app.problems import Problem, from_exception, install
 from app.providers import build_embedder, build_llm
 from app.sessions import COOKIE, Sessions, Turnstile
+from app.transcribe import Transcriber
 from app.usage import Counters, DailyBudget, Quota, Visitor
 
 log = logging.getLogger(__name__)
@@ -90,8 +93,28 @@ def get_quota() -> Quota:
     return Quota(get_counters(), s.quota_session_per_hour, s.quota_ip_per_day)
 
 
+@lru_cache
+def get_messages() -> Messages:
+    return Messages(get_app_engine(), get_settings().message_retention_days)
+
+
+@lru_cache
+def get_suggester() -> Context:
+    # Follow-up suggestions compare questions by their words: no embedding call per answer.
+    return Context(semantic.load(), get_db().schema())
+
+
+@lru_cache
+def get_transcriber() -> Transcriber | None:
+    s = get_settings()
+    if not (s.transcribe_model and s.groq_api_key):
+        return None
+    return Transcriber(s.groq_api_key, s.transcribe_model)
+
+
 def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_llm, sessions_factory=get_sessions,
-               quota_factory=get_quota) -> FastAPI:
+               quota_factory=get_quota, messages_factory=get_messages, suggester_factory=get_suggester,
+               transcriber_factory=get_transcriber) -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="NL Business Analytics Agent")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
@@ -103,28 +126,49 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
             return forwarded.split(",")[0].strip()
         return request.client.host if request.client else "unknown"
 
-    def visitor(request: Request) -> Visitor:
-        """Who is asking; raises when the bot check is missing or a quota is used up. Counts one question."""
+    def identify(request: Request) -> Visitor:
+        """Who is asking; raises when the bot check is on and the request has no session."""
         sessions = sessions_factory()
         session = sessions.read(request.cookies.get(COOKIE))
         if sessions.required and not session:
             raise Problem(403, "bot_check_required", "Please complete the bot check first",
                           "Start a session with POST /api/session and a Turnstile token.")
-        who = Visitor(session, client_ip(request))
+        return Visitor(session, client_ip(request))
+
+    def spend(who: Visitor) -> None:
+        """Count one question against the visitor's quota; raises when it is used up."""
         quota = quota_factory()
         exhausted = quota.spend(who) if quota else None
         if exhausted:
             raise Problem(429, "quota_exceeded", "You have reached the question limit for now",
                           "This free demo limits how many questions one visitor can ask. Please try again later.",
                           retry_after=exhausted.retry_after_s)
+
+    def visitor(request: Request) -> Visitor:
+        """`identify`, then `spend`: for routes where every request is a new question."""
+        who = identify(request)
+        spend(who)
         return who
+
+    def turnstile_site_key() -> str | None:
+        return settings.turnstile_site_key if sessions_factory().required else None
+
+    def starters() -> list[str]:
+        return [q.question for q in semantic.load().queries if q.starter]
+
+    app.include_router(v1_router(
+        analyst=analyst_factory, messages=messages_factory, llm=llm_factory, suggester=suggester_factory,
+        transcriber=transcriber_factory, identify=identify, spend=spend, turnstile_site_key=turnstile_site_key,
+        starters=starters,
+    ))
 
     @app.get("/api/config")
     def config():
         """Settings the web app needs at runtime."""
-        return {"turnstile_site_key": settings.turnstile_site_key if sessions_factory().required else None}
+        return {"turnstile_site_key": turnstile_site_key()}
 
     @app.post("/api/session")
+    @app.post("/v1/session", tags=["v1"])
     def start_session(req: SessionRequest, request: Request):
         """Issue a visitor session cookie, after the Turnstile bot check when it is on."""
         sessions = sessions_factory()
@@ -161,7 +205,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
 
     @app.get("/api/examples")
     def examples():
-        return [q.question for q in semantic.load().queries if q.starter]
+        return starters()
 
     @app.get("/api/schema")
     def schema():

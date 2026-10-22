@@ -14,8 +14,8 @@ Every error from the API is a [problem details](https://www.rfc-editor.org/rfc/r
 ```
 
 Branch on `code`. It never changes once released. `title` and `detail` are written for people and may be reworded.
-On the streaming endpoint the same object arrives as the data of an `error` event, with an extra `error` field
-holding the message.
+On the streaming endpoints the same object arrives as the data of an `error` event (on `/api/ask/stream` with an
+extra `error` field holding the message).
 
 A question the agent could not answer (no working SQL after three attempts, or SQL the guard refused) is not an
 error: the response is a normal answer with its `error` field set.
@@ -28,6 +28,14 @@ error: the response is a normal answer with its `error` field set.
 | <a id="quota-exceeded"></a>`quota_exceeded` | 429 | This visitor or IP address has asked its share of questions for now. `retry_after` (also the `Retry-After` header) says when to try again. |
 | <a id="daily-limit-reached"></a>`daily_limit_reached` | 503 | Every model provider has used today's budget. Answers already in the cache still work; `retry_after` counts down to midnight UTC. |
 | <a id="all-providers-failed"></a>`all_providers_failed` | 503 | Every configured model provider failed or is cooling down; `errors` lists each provider's reason. Try again in a minute. |
+| <a id="idempotency-key-reused"></a>`idempotency_key_reused` | 422 | `/v1`: this `Idempotency-Key` was already used for a different question, conversation or session. Send a new key per question. |
+| <a id="request-in-progress"></a>`request_in_progress` | 409 | `/v1`: the first request with this `Idempotency-Key` is still being answered. Retry after `retry_after` seconds to get its answer. |
+| <a id="message-not-found"></a>`message_not_found` | 404 | `/v1`: no answered message with this id in your session (they are kept for 7 days). |
+| <a id="nothing-to-explain"></a>`nothing_to_explain` | 422 | `/v1`: the answer has no query to explain (an out-of-scope or schema question, or a failed one). |
+| <a id="transcription-unavailable"></a>`transcription_unavailable` | 503 | `/v1/transcribe`: voice questions are not set up on this server (no Groq key). |
+| <a id="unsupported-audio"></a>`unsupported_audio` | 415 | `/v1/transcribe`: send audio/webm, ogg, mp4, mpeg, wav or m4a. |
+| <a id="audio-too-large"></a>`audio_too_large` | 413 | `/v1/transcribe`: the recording is over 2 MB. |
+| <a id="transcription-failed"></a>`transcription_failed` | 502 | `/v1/transcribe`: the speech-to-text service could not read the recording. |
 | <a id="database-unavailable"></a>`database_unavailable` | 503 | `/readyz` could not reach the database. |
 | <a id="unavailable"></a>`unavailable` | 503 | The service is temporarily unavailable. |
 | <a id="not-found"></a>`not_found` | 404 | No such route. |

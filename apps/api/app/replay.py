@@ -10,6 +10,7 @@ change altered what the model is asked, so the cassette needs recording again.
 import hashlib
 import json
 import threading
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TypeVar
 
@@ -62,6 +63,18 @@ class RecordingLLM:
         self._keep(kind, system, user, {"ok": result})
         return result
 
+    def stream_text(self, system: str, user: str, *, tier: Tier = "strong") -> Iterator[str]:
+        # Kept as one text answer, so a streamed reply and a plain one replay the same way.
+        kind, parts = _kind("text", tier), []
+        try:
+            for piece in self._inner.stream_text(system, user, tier=tier):
+                parts.append(piece)
+                yield piece
+        except AllProvidersFailed as e:
+            self._keep(kind, system, user, {"failed": e.errors})
+            raise
+        self._keep(kind, system, user, {"ok": "".join(parts).strip()})
+
     def start_log(self) -> None:
         if isinstance(self._inner, CallLogging):
             self._inner.start_log()
@@ -94,6 +107,9 @@ class ReplayLLM:
 
     def text(self, system: str, user: str, *, tier: Tier = "strong") -> str:
         return self._next(_kind("text", tier), system, user)
+
+    def stream_text(self, system: str, user: str, *, tier: Tier = "strong") -> Iterator[str]:
+        yield self.text(system, user, tier=tier)
 
     def _next(self, kind: str, system: str, user: str):
         key = _key(kind, system, user)

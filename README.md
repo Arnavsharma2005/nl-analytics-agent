@@ -107,6 +107,21 @@ Errors are [problem details](docs/errors.md) with a stable `code` to branch on.
 | `GET` | `/healthz` | Liveness for uptime pings and the host's health check; never touches the database |
 | `GET` | `/readyz` | Readiness: the database answers (`/api/health` is the same check) |
 
+### /v1
+
+The API the new web app (and later SDKs, MCP and bots) uses. `/api/*` above stays as it is for the current web
+app. The full schema is at `/docs` while the app runs.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/v1/conversations/{id}/messages` | Ask `{"question": "..."}` in a conversation (a UUID the client makes up). Send an `Idempotency-Key` UUID: it becomes the message id, and a retry with the same key replays the answer without asking (or spending quota) again. With `Accept: text/event-stream` the answer streams as `message`, `step`, `table`, `chart`, `token` (the summary as it is written) and `done`; otherwise it returns the message as JSON. Each message comes with three follow-up questions from the verified library. |
+| `GET` | `/v1/messages/{id}` | A message you asked (messages are kept for 7 days and belong to your session) |
+| `POST` | `/v1/messages/{id}/feedback` | `{"rating": "up" \| "down", "category": "wrong_data" \| "misunderstood" \| "wrong_chart" \| "lost_context" \| "other", "comment": "..."}` |
+| `POST` | `/v1/messages/{id}/explain` | The answer's SQL as plain-English steps (one model call, then kept) |
+| `POST` | `/v1/transcribe` | Multipart `audio` (webm, ogg, mp4, mpeg, wav or m4a, up to 2 MB) → `{"text": "..."}`, with Whisper on Groq; the key stays on the server |
+| `POST` | `/v1/session` | Same as `/api/session` |
+| `GET` | `/v1/config` | Turnstile site key, starter questions and which features are on |
+
 ## Business rules and verified queries
 
 What the words in a question mean here lives in `apps/api/semantic/`, not in code, so it can be reviewed like

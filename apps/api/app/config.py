@@ -88,6 +88,12 @@ class Settings(BaseSettings):
     # those keys, or with this empty, questions are compared by the words they share.
     embedding_model: str | None = "@cf/baai/bge-m3"
 
+    # --- /v1 ------------------------------------------------------------------------------------------------
+    # Questions and answers asked through /v1 are kept this long, for retries, ratings and explanations.
+    message_retention_days: int = 7
+    # Speech to text for voice questions, with Whisper on Groq (needs GROQ_API_KEY). Empty turns voice off.
+    transcribe_model: str | None = "whisper-large-v3-turbo"
+
     # Set by Render on every deploy; reported by /healthz so you can tell which build is live.
     git_commit: str | None = Field(default=None, validation_alias=AliasChoices("GIT_COMMIT", "RENDER_GIT_COMMIT"))
 

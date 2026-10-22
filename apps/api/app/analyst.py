@@ -112,6 +112,31 @@ class Step:
 
 
 @dataclass(frozen=True)
+class Table:
+    """Emitted by `Analyst.stream` as soon as the query has run (rows already masked)."""
+
+    columns: list[str]
+    rows: list[list[Any]]
+    truncated: bool
+
+
+@dataclass(frozen=True)
+class Chart:
+    """Emitted by `Analyst.stream` once the chart is chosen."""
+
+    spec: ChartSpec
+
+
+@dataclass(frozen=True)
+class Token:
+    """Part of the summary as it is written. `replace` means `text` replaces everything sent so far (a rewrite);
+    otherwise it is added to it. The summary in `Done` is the final one either way."""
+
+    text: str
+    replace: bool = False
+
+
+@dataclass(frozen=True)
 class Done:
     """The last event of `Analyst.stream`."""
 
@@ -148,18 +173,36 @@ class Analyst:
             self._cache.put(question, answer)
         return answer
 
-    async def stream(self, question: str) -> AsyncIterator[Step | Done]:
+    async def stream(self, question: str) -> AsyncIterator[Step | Table | Chart | Token | Done]:
+        """Events as the answer takes shape: a Step as each step finishes, the Table once the query has run, the
+        Chart, the summary as Tokens, and finally Done with the whole Answer."""
         question = question.strip()
         # The cache does blocking database calls, so keep them off the event loop.
         if self._cache and (hit := await asyncio.to_thread(self._cache.get, question)):
             yield Step("cache", STEP_LABELS["cache"])
+            if hit.intent == "data_query":
+                yield Table(hit.columns, hit.rows, hit.truncated)
+                if hit.chart:
+                    yield Chart(hit.chart)
+                if hit.summary:
+                    yield Token(hit.summary, replace=True)
             yield Done(hit)
             return
         final: dict[str, Any] = {}
-        async for mode, chunk in self._graph.astream({"question": question}, stream_mode=["updates", "values"]):
+        modes = ["updates", "values", "custom"]
+        async for mode, chunk in self._graph.astream({"question": question}, stream_mode=modes):
             if mode == "updates":
-                for node in chunk:
+                for node, update in chunk.items():
                     yield Step(node, STEP_LABELS.get(node, node))
+                    if node == "execute" and update and "rows" in update:
+                        yield Table(update["columns"], update["rows"], update["truncated"])
+                    elif node == "chart_agent" and update:
+                        yield Chart(ChartSpec.model_validate(update["chart"]))
+            elif mode == "custom":
+                if "token" in chunk:
+                    yield Token(chunk["token"])
+                elif "summary" in chunk:
+                    yield Token(chunk["summary"] or "", replace=True)
             else:
                 final = chunk
         answer = Answer.from_state(final)

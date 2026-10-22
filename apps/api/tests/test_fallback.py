@@ -35,6 +35,17 @@ class FakeClient:
             raise item
         return Reply(item)
 
+    def stream(self, messages):
+        """A script item that is a list streams its pieces; an exception among them is raised part-way."""
+        self.calls += 1
+        item = self.script[min(self.calls, len(self.script)) - 1]
+        if isinstance(item, Exception):
+            raise item
+        for piece in item if isinstance(item, list) else [item]:
+            if isinstance(piece, Exception):
+                raise piece
+            yield Reply(piece)
+
 
 class Clock:
     def __init__(self):
@@ -173,3 +184,36 @@ def test_fast_models_come_from_settings():
     groq, mistral = build_providers(s)
     assert groq.fast_model == "llama-3.1-8b-instant" and groq.fast_label == "Groq · llama-3.1-8b-instant"
     assert mistral.fast_model is None
+
+
+def test_streamed_text_comes_in_pieces_from_the_first_provider_that_starts():
+    llm, clients, clock = make({"a": [HTTPError(429)], "b": [["Revenue ", "rose ", "12%."]]})
+    llm.start_log()
+    assert list(llm.stream_text("sys", "q")) == ["Revenue ", "rose ", "12%."]
+    assert [c["ok"] for c in llm.take_log()] == [False, True]
+    assert llm.status()[0]["cooling_down_s"] == 60
+
+
+def test_a_stream_that_breaks_part_way_raises():
+    llm, clients, _ = make({"a": [["Revenue ", HTTPError(500)]], "b": [["never"]]})
+    pieces = []
+    with pytest.raises(AllProvidersFailed):
+        for piece in llm.stream_text("sys", "q"):
+            pieces.append(piece)
+    assert pieces == ["Revenue "] and clients["b"].calls == 0
+
+
+def test_an_empty_stream_fails_over():
+    llm, clients, _ = make({"a": [["  ", "\n"]], "b": [["fine"]]})
+    assert "".join(llm.stream_text("sys", "q")) == "fine"
+
+
+@pytest.mark.parametrize("pieces", [
+    ["<think>plan", " more</think>", "\n\nAnswer", " here"],
+    ["<thi", "nk>x</think>Answer here"],
+    ["  <think></think>", "Answer", " here"],
+    ["Answer", " here"],
+])
+def test_streamed_thinking_is_dropped(pieces):
+    llm, _, _ = make({"a": [pieces]})
+    assert "".join(llm.stream_text("sys", "q")) == "Answer here"

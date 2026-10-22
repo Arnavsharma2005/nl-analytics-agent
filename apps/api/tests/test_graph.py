@@ -89,3 +89,45 @@ def test_light_steps_use_the_fast_tier(db):
     llm = FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="Revenue"))
     run(llm, db)
     assert llm.tiers == [("RouteDecision", "fast"), ("SQLDraft", "strong"), ("ChartSpec", "fast"), ("text", "strong")]
+
+
+def collect(analyst, question="Revenue by region"):
+    import asyncio
+
+    async def run_stream():
+        return [e async for e in analyst.stream(question)]
+
+    return asyncio.run(run_stream())
+
+
+def test_stream_sends_the_table_chart_and_summary_as_they_are_ready(db):
+    from app.analyst import Chart, Done, Step, Table, Token
+
+    llm = FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="t"),
+                  summary="North leads.")
+    events = collect(Analyst(llm, db))
+    kinds = [type(e).__name__ for e in events]
+    assert events[kinds.index("Table") - 1] == Step("execute", "Running the query")  # straight after the query
+    table = next(e for e in events if isinstance(e, Table))
+    assert table.columns == ["region", "revenue"] and len(table.rows) == 6
+    assert next(e for e in events if isinstance(e, Chart)).spec.type == "bar"
+    tokens = [e for e in events if isinstance(e, Token)]
+    assert "".join(t.text for t in tokens) == "North leads." and not any(t.replace for t in tokens)
+    assert kinds.index("Table") < kinds.index("Chart") < kinds.index("Token") < kinds.index("Done")
+    assert isinstance(events[-1], Done) and events[-1].answer.summary == "North leads."
+    assert [e.node for e in events if isinstance(e, Step)][-1] == "summary_agent"
+
+
+def test_a_summary_stream_that_breaks_is_written_again_whole(db):
+    from app.analyst import Token
+    from app.llm import AllProvidersFailed
+
+    class Breaks(FakeLLM):
+        def stream_text(self, system, user, tier="strong"):
+            yield "North le"
+            raise AllProvidersFailed([{"provider": "x", "error": "unavailable"}])
+
+    events = collect(Analyst(Breaks(sql=[REVENUE_BY_REGION], summary="North leads."), db))
+    tokens = [e for e in events if isinstance(e, Token)]
+    assert tokens == [Token("North le"), Token("North leads.", replace=True)]
+    assert events[-1].answer.summary == "North leads."

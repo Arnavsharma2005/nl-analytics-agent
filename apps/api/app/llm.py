@@ -10,7 +10,7 @@ import json
 import re
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from typing import Literal, Protocol, TypeVar, runtime_checkable
 
@@ -27,6 +27,11 @@ class LLM(Protocol):
     def structured(self, output: type[T], system: str, user: str, *, tier: Tier = "strong") -> T: ...
 
     def text(self, system: str, user: str, *, tier: Tier = "strong") -> str: ...
+
+    def stream_text(self, system: str, user: str, *, tier: Tier = "strong") -> Iterator[str]:
+        """Like `text`, in pieces as they are written. Joined, the pieces are the same reply `text` would give.
+        May raise AllProvidersFailed part-way through, after some pieces."""
+        ...
 
 
 @runtime_checkable
@@ -222,6 +227,66 @@ class FallbackLLM:
             return out
 
         return self._run(system, user, parse, tier)
+
+    def stream_text(self, system: str, user: str, *, tier: Tier = "strong") -> Iterator[str]:
+        """Streams from the first provider that starts answering. Failing over is only possible before the first
+        piece; a provider that fails after that raises AllProvidersFailed."""
+        errors = []
+        for p in self.available(tier):
+            start = time.perf_counter()
+            if self._budget and not self._budget(p.name):
+                errors.append({"provider": p.label, "error": BUDGET_USED})
+                self._log({"provider": p.label, "ok": False, "error": BUDGET_USED, "seconds": 0})
+                continue
+            started = False
+            try:
+                chunks = (_content(c) for c in self._client(p).stream([("system", system), ("human", user)]))
+                for piece in _without_thinking(chunks):
+                    started = True
+                    yield piece
+                if not started:
+                    raise BadOutput("empty reply")
+            except Exception as e:  # noqa: BLE001 - any failure moves on to the next provider, if nothing was sent
+                reason, cooldown = classify(e)
+                if cooldown:
+                    with self._lock:
+                        self._cooldown_until[p.name] = self._clock() + cooldown
+                errors.append({"provider": p.label, "error": reason})
+                self._log({"provider": p.label, "ok": False, "error": reason, "seconds": round(time.perf_counter() - start, 2)})
+                if started:
+                    raise AllProvidersFailed(errors) from e
+                continue
+            self._log({"provider": p.label, "ok": True, "seconds": round(time.perf_counter() - start, 2)})
+            return
+        raise AllProvidersFailed(errors)
+
+
+def _without_thinking(chunks: Iterator[str]) -> Iterator[str]:
+    """Drop a leading <think>...</think> block and leading whitespace from a streamed reply."""
+    buffer, opened = "", False
+    for chunk in chunks:
+        if buffer is None:  # past the start: pass everything through
+            yield chunk
+            continue
+        buffer += chunk
+        head = buffer.lstrip()
+        if not opened and (head.lower().startswith("<think>") or "<think>".startswith(head.lower())):
+            opened = head.lower().startswith("<think>")
+            if not opened:
+                continue  # could still become "<think>"
+        if opened:
+            end = buffer.lower().find("</think>")
+            if end < 0:
+                continue
+            head = buffer[end + len("</think>"):].lstrip()
+            opened = False
+            if not head:
+                buffer = ""
+                continue
+        buffer = None
+        yield head
+    if buffer and not opened and buffer.strip():
+        yield buffer.strip()
 
 
 def _content(reply) -> str:
