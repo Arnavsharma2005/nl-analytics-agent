@@ -14,6 +14,10 @@ export type ConversationSummary = Schemas["ConversationV1"];
 export type Dataset = Schemas["DatasetV1"];
 export type Share = Schemas["ShareV1"];
 export type DatasetColumn = Schemas["ColumnV1"];
+export type CuratorOverview = Schemas["CuratorV1"];
+export type Candidate = Schemas["CandidateV1"];
+export type Curated = Schemas["CuratedV1"];
+export type Review = Schemas["ReviewV1"];
 export type Cell = string | number | boolean | null;
 
 /** The data of each server-sent event on POST /v1/conversations/{id}/messages. */

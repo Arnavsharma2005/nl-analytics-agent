@@ -298,6 +298,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/curator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Overview
+         * @description The review queue, and what is approved but not yet in the library.
+         */
+        get: operations["overview_v1_curator_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/curator/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export
+         * @description Open a draft pull request adding the approved answers to semantic/queries.yml, where CI checks them.
+         */
+        post: operations["export_v1_curator_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/curator/export.yml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Yaml
+         * @description The approved answers as entries to paste at the end of semantic/queries.yml.
+         */
+        get: operations["export_yaml_v1_curator_export_yml_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/curator/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review
+         * @description Approve or reject a queued answer. Approving keeps it for the next export; nothing changes what the
+         *     analyst does until that pull request is merged.
+         */
+        post: operations["review_v1_curator__message_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/datasets": {
         parameters: {
             query?: never;
@@ -655,6 +736,41 @@ export interface components {
             /** File */
             file: string;
         };
+        /**
+         * CandidateV1
+         * @description An answer rated thumbs up, waiting for a curator.
+         */
+        CandidateV1: {
+            /**
+             * Asked
+             * @description The question as it was typed.
+             */
+            asked: string;
+            /**
+             * Comment
+             * @description What the person who rated it said, if anything.
+             */
+            comment: string | null;
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            /**
+             * Question
+             * @description The question as it was understood: a follow-up written out in full.
+             */
+            question: string;
+            /**
+             * Rated At
+             * Format: date-time
+             */
+            rated_at: string;
+            /** Sql */
+            sql: string;
+            /** Summary */
+            summary: string | null;
+        };
         /** ChartSpec */
         ChartSpec: {
             /**
@@ -779,6 +895,56 @@ export interface components {
             updated_at: string;
         };
         /**
+         * CuratedV1
+         * @description A curator's decision on an answer.
+         */
+        CuratedV1: {
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            /**
+             * Pr Url
+             * @description The pull request it was exported in; none until then.
+             */
+            pr_url: string | null;
+            /** Question */
+            question: string;
+            /**
+             * Reviewed At
+             * Format: date-time
+             */
+            reviewed_at: string;
+            /** Reviewer */
+            reviewer: string;
+            /** Sql */
+            sql: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "approved" | "rejected";
+        };
+        /** CuratorV1 */
+        CuratorV1: {
+            /**
+             * Approved
+             * @description Approved answers not yet exported to the library.
+             */
+            approved: components["schemas"]["CuratedV1"][];
+            /**
+             * Can Open Pr
+             * @description Whether exporting opens a pull request (CURATOR_GITHUB_TOKEN is set); otherwise copy the YAML from GET /v1/curator/export.yml.
+             */
+            can_open_pr: boolean;
+            /**
+             * Queue
+             * @description Answers rated thumbs up, waiting for a decision.
+             */
+            queue: components["schemas"]["CandidateV1"][];
+        };
+        /**
          * DatasetV1
          * @description An uploaded file, ready for questions.
          */
@@ -818,6 +984,16 @@ export interface components {
         ExplanationV1: {
             /** Steps */
             steps: string[];
+        };
+        /** ExportV1 */
+        ExportV1: {
+            /** Count */
+            count: number;
+            /**
+             * Url
+             * @description The pull request that adds them to semantic/queries.yml.
+             */
+            url: string;
         };
         /**
          * Failure
@@ -889,6 +1065,19 @@ export interface components {
              */
             suggestions: string[];
         };
+        /** ReviewV1 */
+        ReviewV1: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approve" | "reject";
+            /**
+             * Question
+             * @description Approve under this wording instead of the question as understood.
+             */
+            question?: string | null;
+        };
         /** SessionRequest */
         SessionRequest: {
             /** Turnstile Token */
@@ -940,6 +1129,12 @@ export interface components {
         UserV1: {
             /** Avatar Url */
             avatar_url: string | null;
+            /**
+             * Curator
+             * @description Whether they may use the Curator (/curator).
+             * @default false
+             */
+            curator: boolean;
             /** Login */
             login: string;
             /** Name */
@@ -1349,6 +1544,101 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MessageV1"];
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    overview_v1_curator_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuratorV1"];
+                };
+            };
+        };
+    };
+    export_v1_curator_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportV1"];
+                };
+            };
+        };
+    };
+    export_yaml_v1_curator_export_yml_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    review_v1_curator__message_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewV1"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuratedV1"];
                 };
             };
             /** @description Validation Error */

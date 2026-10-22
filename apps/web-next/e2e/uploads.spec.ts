@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { message, mockApi, SALES_CSV, STARTERS } from "./mock";
+import { ARNAV, message, mockApi, SALES_CSV, STARTERS } from "./mock";
 
 const CSV = { name: "shop_sales.csv", mimeType: "text/csv", buffer: Buffer.from("Order Date,City,Contact,Amount (INR)\n2025-01-01,Bengaluru,a@b.in,120\n") };
 
@@ -85,7 +85,6 @@ function historyAbout(datasetId: string) {
   }];
 }
 
-const ARNAV = { login: "arnav", name: "Arnav", avatar_url: null };
 
 test("an earlier conversation about an uploaded file is carried on about that file", async ({ page }) => {
   const api = await mockApi(page, { user: ARNAV, datasets: [SALES_CSV], history: historyAbout(SALES_CSV.id) });

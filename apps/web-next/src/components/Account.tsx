@@ -165,6 +165,9 @@ export default function Account({ current, onOpen }: Props) {
   }
   return (
     <>
+      {user.curator && (
+        <a href="/curator" className="rounded-md px-2 py-1.5 text-sm hover:bg-rule/60">Review answers</a>
+      )}
       <button type="button" onClick={() => setOpen(true)} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-rule/60">
         {user.avatar_url && <img src={user.avatar_url} alt="" className="size-6 rounded-full" />}
         History

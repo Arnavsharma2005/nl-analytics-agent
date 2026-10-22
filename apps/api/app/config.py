@@ -123,6 +123,13 @@ class Settings(BaseSettings):
     public_url: str | None = None
     # How long a sign-in lasts.
     user_session_days: int = 30
+    # GitHub logins (lowercase or not) that may use the Curator, as a JSON list: ["arnavsharma2005"].
+    curators: list[str] = []
+    # Lets the Curator open a pull request adding approved answers to semantic/queries.yml: a fine-grained token
+    # with Contents and Pull requests read/write on CURATOR_REPO ("owner/name") only. Unset: copy the YAML instead.
+    curator_github_token: str | None = None
+    curator_repo: str | None = None
+    curator_base_branch: str = "main"
     # Speech to text for voice questions, with Whisper on Groq (needs GROQ_API_KEY). Empty turns voice off.
     transcribe_model: str | None = "whisper-large-v3-turbo"
 

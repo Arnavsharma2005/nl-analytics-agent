@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { answerEvents, message, mockApi, sse, STARTERS } from "./mock";
+import { answerEvents, ARNAV, message, mockApi, sse, STARTERS } from "./mock";
 
 const problem = (status: number, code: string, title: string, extra: object = {}) =>
   ({ status, body: JSON.stringify({ status, code, title, ...extra }) });
@@ -166,7 +166,6 @@ test("on a phone the page fits the screen and the details open as a sheet @mobil
   await expect(sheet).toBeHidden();
 });
 
-const ARNAV = { login: "arnav", name: "Arnav", avatar_url: null };
 
 test("signing in is offered, and goes to GitHub and back to this page", async ({ page }) => {
   await mockApi(page);

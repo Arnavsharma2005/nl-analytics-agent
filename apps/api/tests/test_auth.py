@@ -99,7 +99,8 @@ def test_signing_in_goes_to_github_with_pkce_and_comes_back_signed_in(make, gith
     assert r.status_code == 303 and r.headers["location"] == f"{SITE}/?q=1"
     assert "aa_user" in r.cookies
     assert client.get("/v1/me").json() == {"user": {"login": "arnav", "name": "Arnav",
-                                                    "avatar_url": "https://avatars.example/a"}}
+                                                    "avatar_url": "https://avatars.example/a",
+                                                    "curator": False}}
 
 
 def test_a_callback_that_does_not_match_the_attempt_signs_no_one_in(make, github):
