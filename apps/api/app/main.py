@@ -25,6 +25,7 @@ from app.api_mcp import mcp_route, mcp_server
 from app.api_shares import shares_router
 from app.api_v1 import v1_router
 from app.auth import GitHub, Users
+from app.confidence import load_model
 from app.config import get_settings
 from app.context import Context
 from app.curation import Curation, LibraryPR
@@ -96,7 +97,7 @@ def get_analyst() -> Analyst:
         cache = AnswerCache(get_app_engine(), version, s.answer_cache_ttl_s)
     return Analyst(get_llm(), db, max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm, cache=cache,
                    context=context, check_results=s.check_results, check_summaries=s.check_summaries,
-                   drivers=drivers, forecasting=s.forecasting)
+                   drivers=drivers, forecasting=s.forecasting, confidence=load_model())
 
 
 @lru_cache

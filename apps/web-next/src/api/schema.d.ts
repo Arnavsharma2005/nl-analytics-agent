@@ -687,6 +687,8 @@ export interface components {
             chart_source: ("llm" | "fallback") | null;
             /** Columns */
             columns: string[];
+            /** @description How the answer was reached and, once a model is trained, how likely it is to be right (app/confidence.py). Only for answered data questions. */
+            confidence: components["schemas"]["Confidence"] | null;
             /**
              * Error
              * @description Set when no working query could be built.
@@ -883,6 +885,25 @@ export interface components {
              * @description Why it is hidden from answers, when it is personal data.
              */
             personal: string | null;
+        };
+        /**
+         * Confidence
+         * @description An answer's signals and, once a model is trained, how likely it is to be right.
+         */
+        Confidence: {
+            /** Label */
+            label?: ("high" | "medium" | "low") | null;
+            /**
+             * Model
+             * @description Which trained model scored it.
+             */
+            model?: string | null;
+            /**
+             * Probability
+             * @description Calibrated chance the answer is right.
+             */
+            probability?: number | null;
+            signals: components["schemas"]["Signals"];
         };
         /** ConfigV1 */
         ConfigV1: {
@@ -1207,6 +1228,70 @@ export interface components {
              * @description A Google Sheets link, shared with "Anyone with the link". A #gid=... part picks the tab; otherwise the first tab.
              */
             url: string;
+        };
+        /**
+         * Signals
+         * @description What the pipeline knows about how an answer was reached.
+         */
+        Signals: {
+            /**
+             * Assumptions
+             * @description Readings of an ambiguous question the SQL agent chose.
+             */
+            assumptions: number;
+            /**
+             * Attempts
+             * @description Queries the SQL agent wrote.
+             */
+            attempts: number;
+            /**
+             * Empty Result
+             * @description No rows, or nothing but NULLs.
+             */
+            empty_result: boolean;
+            /**
+             * Empty Retries
+             * @description Queries sent back because they found nothing.
+             */
+            empty_retries: number;
+            /**
+             * Failed Runs
+             * @description Queries that failed when run.
+             */
+            failed_runs: number;
+            /**
+             * Follow Up
+             * @description The question was rewritten using earlier turns of its conversation.
+             */
+            follow_up: boolean;
+            /**
+             * Invalid Attempts
+             * @description Queries refused by the guard or the planner.
+             */
+            invalid_attempts: number;
+            /** Joins */
+            joins: number;
+            /**
+             * Nearest Example
+             * @description Similarity (0 to 1) of the closest verified example the SQL agent was shown; None when context retrieval is off.
+             */
+            nearest_example: number | null;
+            /** Rows */
+            rows: number;
+            /** Subqueries */
+            subqueries: number;
+            /**
+             * Summary Checked
+             * @description Every figure in the summary was found in the result (None: not checked).
+             */
+            summary_checked: boolean | null;
+            /**
+             * Verified
+             * @description A verified query answered the question as written.
+             */
+            verified: boolean;
+            /** Window Functions */
+            window_functions: boolean;
         };
         /** TranscriptV1 */
         TranscriptV1: {
