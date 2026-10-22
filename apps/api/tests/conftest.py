@@ -108,5 +108,38 @@ def app_tables(app_engine):
     from sqlalchemy import text
 
     with app_engine.begin() as conn:
-        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback, app.users"))
+        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback, app.users, app.datasets"))
     return app_engine
+
+
+DEMO_TABLES = ["regions", "customers", "categories", "products", "orders", "order_items"]
+
+
+def demo_as_parquet(db) -> dict[str, bytes]:
+    """The demo tables as Parquet files, for building a DuckDB copy of the demo data."""
+    import tempfile
+    from pathlib import Path
+
+    import duckdb
+
+    out = {}
+    with tempfile.TemporaryDirectory() as tmp, duckdb.connect() as duck:
+        raw = db.engine.raw_connection()
+        try:
+            for table in DEMO_TABLES:
+                csv = Path(tmp) / f"{table}.csv"
+                with raw.cursor() as cur, cur.copy(f"COPY {table} TO STDOUT WITH CSV HEADER") as copy, \
+                        csv.open("wb") as f:
+                    for chunk in copy:
+                        f.write(chunk)
+                parquet = Path(tmp) / f"{table}.parquet"
+                duck.execute(f"COPY (SELECT * FROM read_csv('{csv}', header = true)) TO '{parquet}' (FORMAT parquet)")
+                out[table] = parquet.read_bytes()
+        finally:
+            raw.close()
+    return out
+
+
+@pytest.fixture(scope="session")
+def demo_parquet(db):
+    return demo_as_parquet(db)

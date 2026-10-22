@@ -28,7 +28,7 @@ test("a question streams into an answer with marked figures, a chart and follow-
 
   await page.getByRole("button", { name: "Which region has the highest margin?" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Which region has the highest margin?" })).toBeVisible();
-  expect(api.asked.map((a) => a.question)).toEqual([STARTERS[0], "Which region has the highest margin?"]);
+  await expect.poll(() => api.asked.map((a) => a.question)).toEqual([STARTERS[0], "Which region has the highest margin?"]);
 });
 
 test("typing a question and pressing Enter asks it", async ({ page }) => {
@@ -39,7 +39,7 @@ test("typing a question and pressing Enter asks it", async ({ page }) => {
   await box.press("Enter");
   await expect(page.getByRole("heading", { level: 2, name: "Top 5 customers by revenue" })).toBeVisible();
   await expect(box).toHaveValue("");
-  expect(api.asked[0].question).toBe("Top 5 customers by revenue");
+  await expect.poll(() => api.asked[0]?.question).toBe("Top 5 customers by revenue");
 });
 
 test("a follow-up shows how it was understood with the earlier questions", async ({ page }) => {
@@ -186,7 +186,7 @@ test("an earlier conversation can be opened from the history and carried on", as
   const first = message("0b3e3a8e-5c1d-4d5e-8f7a-1b2c3d4e5f60", conversation, "Revenue by region");
   const api = await mockApi(page, {
     user: ARNAV,
-    history: [{ conversation: { id: conversation, title: "Revenue by region", messages: 1, updated_at: new Date().toISOString() }, messages: [first] }],
+    history: [{ conversation: { id: conversation, title: "Revenue by region", messages: 1, dataset_id: null, updated_at: new Date().toISOString() }, messages: [first] }],
   });
   await page.goto("/");
   await page.getByRole("button", { name: "History" }).click();
@@ -201,7 +201,7 @@ test("an earlier conversation can be opened from the history and carried on", as
   await box.fill("and in 2024?");
   await box.press("Enter");
   await expect(page.getByRole("heading", { level: 2, name: "and in 2024?" })).toBeVisible();
-  expect(api.asked.at(-1)!.conversation).toBe(conversation); // the follow-up is asked in the opened conversation
+  await expect.poll(() => api.asked.at(-1)?.conversation).toBe(conversation); // the follow-up is asked in the opened conversation
 });
 
 test("signing out from the history", async ({ page }) => {
@@ -228,7 +228,7 @@ test("the history has no accessibility violations and fits a phone @mobile", asy
   await mockApi(page, {
     user: ARNAV,
     history: [{
-      conversation: { id: conversation, title: "Which region grew revenue the fastest from 2024 to 2025, in percent?", messages: 3, updated_at: new Date(Date.now() - 3 * 86_400_000).toISOString() },
+      conversation: { id: conversation, title: "Which region grew revenue the fastest from 2024 to 2025, in percent?", messages: 3, dataset_id: null, updated_at: new Date(Date.now() - 3 * 86_400_000).toISOString() },
       messages: [],
     }],
   });

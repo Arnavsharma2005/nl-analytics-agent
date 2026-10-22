@@ -6,7 +6,7 @@ from app.llm import LLM
 
 Intent = Literal["data_query", "schema_question", "out_of_scope"]
 
-SYSTEM = """You are the router for a business analytics assistant over an e-commerce database.
+SYSTEM = """You are the router for a business analytics assistant over {about}.
 Classify the user's message into exactly one intent:
 
 - data_query: a question answerable by querying the data (metrics, trends, rankings, comparisons, counts,
@@ -23,8 +23,8 @@ class RouteDecision(BaseModel):
     intent: Intent
 
 
-def route(llm: LLM, question: str, tables: list[str]) -> RouteDecision:
-    return llm.structured(RouteDecision, SYSTEM.format(tables=", ".join(tables)), question, tier="fast")
+def route(llm: LLM, question: str, tables: list[str], about: str) -> RouteDecision:
+    return llm.structured(RouteDecision, SYSTEM.format(about=about, tables=", ".join(tables)), question, tier="fast")
 
 
 SCHEMA_SYSTEM = """You help business users understand what data they can ask about.

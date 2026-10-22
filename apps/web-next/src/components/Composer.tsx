@@ -6,17 +6,19 @@ interface Props {
   onAsk: (question: string) => void;
   busy: boolean;
   voice: boolean;
+  /** What questions are about, for the placeholder; null when nothing can be asked (the uploaded file is gone). */
+  about: string | null;
 }
 
 const MIN = 3;
 const MAX = 500;
 
-export default function Composer({ onAsk, busy, voice }: Props) {
+export default function Composer({ onAsk, busy, voice, about }: Props) {
   const [text, setText] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const question = text.trim();
-  const ready = question.length >= MIN && !busy;
+  const ready = question.length >= MIN && !busy && about !== null;
 
   useEffect(() => {
     const el = box.current!;
@@ -47,7 +49,8 @@ export default function Composer({ onAsk, busy, voice }: Props) {
           rows={1}
           value={text}
           maxLength={MAX}
-          placeholder="Ask a question about the sales data"
+          disabled={about === null}
+          placeholder={about === null ? "Start a new conversation to keep asking" : `Ask a question about ${about}`}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

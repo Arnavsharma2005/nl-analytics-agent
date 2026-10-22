@@ -298,6 +298,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Datasets
+         * @description Your uploaded files that haven't expired, newest first (none before you have a session).
+         */
+        get: operations["list_datasets_v1_datasets_get"];
+        put?: never;
+        /**
+         * Upload
+         * @description Upload a CSV file (by default up to 5 MB, 200,000 rows and 60 columns) to ask questions about it, by
+         *     sending its id as `dataset_id` with each question. It is kept for a day. Personal data such as email
+         *     addresses and phone numbers is found and never shown in answers.
+         */
+        post: operations["upload_v1_datasets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/datasets/{dataset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dataset */
+        get: operations["get_dataset_v1_datasets__dataset_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Dataset */
+        delete: operations["delete_dataset_v1_datasets__dataset_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -505,6 +549,11 @@ export interface components {
         };
         /** AskV1 */
         AskV1: {
+            /**
+             * Dataset Id
+             * @description Ask about an uploaded file (POST /v1/datasets) instead of the demo's sales data.
+             */
+            dataset_id?: string | null;
             /** Question */
             question: string;
         };
@@ -514,6 +563,11 @@ export interface components {
             audio: string;
             /** Language */
             language?: string | null;
+        };
+        /** Body_upload_v1_datasets_post */
+        Body_upload_v1_datasets_post: {
+            /** File */
+            file: string;
         };
         /** ChartSpec */
         ChartSpec: {
@@ -543,6 +597,57 @@ export interface components {
              */
             y: string[];
         };
+        /**
+         * ColumnV1
+         * @description One column of an uploaded table.
+         */
+        ColumnV1: {
+            /**
+             * Distinct
+             * @description Distinct values (approximate on large tables).
+             */
+            distinct: number;
+            /**
+             * Empty
+             * @description Rows with no value.
+             */
+            empty: number;
+            /**
+             * Examples
+             * @description Common values, for text.
+             */
+            examples: string[];
+            /**
+             * Header
+             * @description Its heading in the file.
+             */
+            header: string;
+            /**
+             * High
+             * @description Largest value, for numbers and dates.
+             */
+            high: string | number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "number" | "date" | "datetime" | "yes/no" | "other";
+            /**
+             * Low
+             * @description Smallest value, for numbers and dates.
+             */
+            low: string | number | null;
+            /**
+             * Name
+             * @description The column's name in questions and SQL.
+             */
+            name: string;
+            /**
+             * Personal
+             * @description Why it is hidden from answers, when it is personal data.
+             */
+            personal: string | null;
+        };
         /** ConfigV1 */
         ConfigV1: {
             /** Features */
@@ -553,12 +658,22 @@ export interface components {
             starters: string[];
             /** Turnstile Site Key */
             turnstile_site_key: string | null;
+            /**
+             * Upload Max Mb
+             * @description The largest CSV file that can be uploaded; null when uploads are off.
+             */
+            upload_max_mb: number | null;
         };
         /**
          * ConversationV1
          * @description A conversation in someone's history.
          */
         ConversationV1: {
+            /**
+             * Dataset Id
+             * @description The uploaded dataset it is about; none for the demo data.
+             */
+            dataset_id: string | null;
             /**
              * Id
              * Format: uuid
@@ -576,6 +691,37 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * DatasetV1
+         * @description An uploaded file, ready for questions.
+         */
+        DatasetV1: {
+            /** Columns */
+            columns: components["schemas"]["ColumnV1"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Rows */
+            rows: number;
+            /** Suggestions */
+            suggestions: string[];
+            /** Table */
+            table: string;
         };
         /** ExplanationV1 */
         ExplanationV1: {
@@ -634,6 +780,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Dataset Id
+             * @description The uploaded dataset it asked about; none for the demo data.
+             */
+            dataset_id: string | null;
             /**
              * Id
              * Format: uuid
@@ -1071,6 +1222,119 @@ export interface operations {
                     "application/json": components["schemas"]["MessageV1"];
                     "text/event-stream": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_datasets_v1_datasets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetV1"][];
+                };
+            };
+        };
+    };
+    upload_v1_datasets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_v1_datasets_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dataset_v1_datasets__dataset_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dataset_v1_datasets__dataset_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

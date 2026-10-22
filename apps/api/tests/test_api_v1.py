@@ -281,7 +281,9 @@ def test_voice_problems(make, transcriber, upload, status, code):
 def test_config_lists_starters_and_features(make):
     body = make(transcriber=FakeTranscriber()).get("/v1/config").json()
     assert body["turnstile_site_key"] is None and 5 <= len(body["starters"]) <= 10
-    assert body["features"] == {"voice": True, "explain": True, "feedback": True, "sign_in": False}
+    assert body["features"] == {"voice": True, "explain": True, "feedback": True, "sign_in": False,
+                                "uploads": True}
+    assert body["upload_max_mb"] == 5
     assert make().get("/v1/config").json()["features"]["voice"] is False
 
 

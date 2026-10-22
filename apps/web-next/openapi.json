@@ -247,6 +247,19 @@
       },
       "AskV1": {
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ask about an uploaded file (POST /v1/datasets) instead of the demo's sales data.",
+            "title": "Dataset Id"
+          },
           "question": {
             "maxLength": 500,
             "minLength": 3,
@@ -284,6 +297,20 @@
           "audio"
         ],
         "title": "Body_transcribe_v1_transcribe_post",
+        "type": "object"
+      },
+      "Body_upload_v1_datasets_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_v1_datasets_post",
         "type": "object"
       },
       "ChartSpec": {
@@ -348,6 +375,106 @@
         "title": "ChartSpec",
         "type": "object"
       },
+      "ColumnV1": {
+        "description": "One column of an uploaded table.",
+        "properties": {
+          "distinct": {
+            "description": "Distinct values (approximate on large tables).",
+            "title": "Distinct",
+            "type": "integer"
+          },
+          "empty": {
+            "description": "Rows with no value.",
+            "title": "Empty",
+            "type": "integer"
+          },
+          "examples": {
+            "description": "Common values, for text.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "header": {
+            "description": "Its heading in the file.",
+            "title": "Header",
+            "type": "string"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Largest value, for numbers and dates.",
+            "title": "High"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "number",
+              "date",
+              "datetime",
+              "yes/no",
+              "other"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Smallest value, for numbers and dates.",
+            "title": "Low"
+          },
+          "name": {
+            "description": "The column's name in questions and SQL.",
+            "title": "Name",
+            "type": "string"
+          },
+          "personal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is hidden from answers, when it is personal data.",
+            "title": "Personal"
+          }
+        },
+        "required": [
+          "name",
+          "header",
+          "kind",
+          "empty",
+          "distinct",
+          "low",
+          "high",
+          "examples",
+          "personal"
+        ],
+        "title": "ColumnV1",
+        "type": "object"
+      },
       "ConfigV1": {
         "properties": {
           "features": {
@@ -374,12 +501,25 @@
               }
             ],
             "title": "Turnstile Site Key"
+          },
+          "upload_max_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The largest CSV file that can be uploaded; null when uploads are off.",
+            "title": "Upload Max Mb"
           }
         },
         "required": [
           "turnstile_site_key",
           "starters",
-          "features"
+          "features",
+          "upload_max_mb"
         ],
         "title": "ConfigV1",
         "type": "object"
@@ -387,6 +527,19 @@
       "ConversationV1": {
         "description": "A conversation in someone's history.",
         "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The uploaded dataset it is about; none for the demo data.",
+            "title": "Dataset Id"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -410,10 +563,69 @@
         "required": [
           "id",
           "title",
+          "dataset_id",
           "messages",
           "updated_at"
         ],
         "title": "ConversationV1",
+        "type": "object"
+      },
+      "DatasetV1": {
+        "description": "An uploaded file, ready for questions.",
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnV1"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "table",
+          "rows",
+          "columns",
+          "suggestions",
+          "created_at",
+          "expires_at"
+        ],
+        "title": "DatasetV1",
         "type": "object"
       },
       "ExplanationV1": {
@@ -556,6 +768,19 @@
             "title": "Created At",
             "type": "string"
           },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The uploaded dataset it asked about; none for the demo data.",
+            "title": "Dataset Id"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -577,6 +802,7 @@
         "required": [
           "id",
           "conversation_id",
+          "dataset_id",
           "question",
           "answer",
           "suggestions",
@@ -1142,6 +1368,149 @@
           }
         },
         "summary": "Ask",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/datasets": {
+      "get": {
+        "description": "Your uploaded files that haven't expired, newest first (none before you have a session).",
+        "operationId": "list_datasets_v1_datasets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DatasetV1"
+                  },
+                  "title": "Response List Datasets V1 Datasets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Datasets",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Upload a CSV file (by default up to 5 MB, 200,000 rows and 60 columns) to ask questions about it, by\nsending its id as `dataset_id` with each question. It is kept for a day. Personal data such as email\naddresses and phone numbers is found and never shown in answers.",
+        "operationId": "upload_v1_datasets_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_v1_datasets_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/datasets/{dataset_id}": {
+      "delete": {
+        "operationId": "delete_dataset_v1_datasets__dataset_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Dataset",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "operationId": "get_dataset_v1_datasets__dataset_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Dataset",
         "tags": [
           "v1"
         ]

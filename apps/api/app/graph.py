@@ -22,17 +22,13 @@ from app.agents.followup import Turn, standalone
 from app.agents.router import answer_schema_question, route
 from app.agents.sql_agent import write_sql
 from app.agents.summary import stream_summary, summarize
+from app.brief import Brief
 from app.checks import EMPTY_RESULT, looks_empty, unsupported_numbers
 from app.context import Context, ContextPack
 from app.db import DataSource, QueryError
 from app.llm import LLM, AllProvidersFailed, CallLogging
 from app.privacy import mask_rows
 from app.sql_guard import SQLValidationError, validate_sql
-
-OUT_OF_SCOPE_REPLY = (
-    "I can only answer questions about the sales data: orders, revenue, products, categories, customers and "
-    "regions for 2024-2025. Try something like \"Monthly revenue in 2025\" or \"Top 5 products by profit\"."
-)
 
 
 def _add_timings(a: dict[str, float], b: dict[str, float]) -> dict[str, float]:
@@ -89,7 +85,7 @@ def _timed(name: str, llm: LLM | None = None):
     return deco
 
 
-def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: int = 50, *,
+def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: int = 50, *, brief: Brief,
                 context: Context | None = None, check_results: bool = False, check_summaries: bool = False):
     schema = db.schema()
     schema_text = schema.describe()
@@ -106,7 +102,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
 
     @timed("router")
     def router_node(state: AnalyticsState):
-        decision = route(llm, state["question"], table_names)
+        decision = route(llm, state["question"], table_names, brief.about)
         return {"intent": decision.intent, "route_reason": decision.reason, "failures": [], "sql_attempts": 0}
 
     @timed("schema_answer")
@@ -114,7 +110,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
         return {"answer": answer_schema_question(llm, state["question"], schema_text)}
 
     def out_of_scope_node(state: AnalyticsState):
-        return {"answer": OUT_OF_SCOPE_REPLY}
+        return {"answer": brief.out_of_scope}
 
     @timed("context")
     def context_node(state: AnalyticsState):
@@ -129,14 +125,15 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     def write_sql_node(state: AnalyticsState):
         previous = [(f["sql"], f["error"]) for f in state.get("failures", [])]
         pack = state.get("context")
-        draft = write_sql(llm, state["question"], schema_text, previous, pack.prompt_text() if pack else None)
+        draft = write_sql(llm, state["question"], schema_text, previous, brief, db.dialect,
+                          pack.prompt_text() if pack else None)
         return {"sql": draft.sql, "sql_reasoning": draft.reasoning, "sql_attempts": state.get("sql_attempts", 0) + 1,
                 "assumptions": getattr(draft, "assumptions", []), "verified_question": None}
 
     @timed("validate")
     def validate_node(state: AnalyticsState):
         try:
-            sql = validate_sql(state["sql"], set(table_names), personal_columns)
+            sql = validate_sql(state["sql"], set(table_names), personal_columns, db.dialect)
             db.explain(sql)
         except (SQLValidationError, QueryError) as e:
             failure = {"sql": state["sql"], "error": str(e), "stage": "validate"}
@@ -172,7 +169,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
 
         def write(unsupported=None) -> str:
             args = (llm, state["question"], state["columns"], shown, len(rows), state.get("truncated", False),
-                    unsupported)
+                    unsupported, brief.money)
             if unsupported:
                 emit({"summary": ""})
             parts = []

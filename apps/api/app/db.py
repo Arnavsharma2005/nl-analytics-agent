@@ -83,6 +83,8 @@ class QueryError(Exception):
 class DataSource(Protocol):
     """What the analyst needs from a database it can query."""
 
+    dialect: str  # the SQL it speaks, as sqlglot names it: "postgres" or "duckdb"
+
     def schema(self) -> Schema:
         """The tables the model may query, with comments and small value lists. Cached after the first call."""
         ...
@@ -109,6 +111,8 @@ class Database:
     """A PostgreSQL data source. Queries run in read-only transactions with a statement timeout; `explain` also
     rejects plans whose estimated cost is above `max_cost` (0 turns the check off), which catches runaway joins
     before they run. `personal_columns` ("table.column") are marked as personal data in the schema."""
+
+    dialect = "postgres"
 
     def __init__(self, url: str, statement_timeout_ms: int = 10_000, max_rows: int = 500, max_cost: float = 0,
                  personal_columns: Iterable[str] = ()):

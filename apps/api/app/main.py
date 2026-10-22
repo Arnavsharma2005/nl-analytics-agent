@@ -1,6 +1,7 @@
 import hmac
 import json
 import logging
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,10 +18,14 @@ from app import semantic
 from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
 from app.api_auth import auth_router, is_https, signed_in_user
+from app.api_datasets import datasets_router
 from app.api_v1 import v1_router
 from app.auth import GitHub, Users
 from app.config import get_settings
 from app.context import Context
+from app.datasets.csv_upload import Limits
+from app.datasets.registry import DatasetAnalysts
+from app.datasets.store import Datasets
 from app.db import Database
 from app.llm import FallbackLLM
 from app.messages import Messages
@@ -104,6 +109,20 @@ def get_messages() -> Messages:
 
 
 @lru_cache
+def get_datasets() -> Datasets:
+    s = get_settings()
+    return Datasets(get_app_engine(), s.upload_ttl_hours, s.uploads_per_owner, s.uploads_total_mb)
+
+
+@lru_cache
+def get_dataset_analysts() -> DatasetAnalysts:
+    s = get_settings()
+    return DatasetAnalysts(get_datasets(), get_llm, keep=s.uploads_open, max_attempts=s.max_sql_attempts,
+                           rows_for_llm=s.rows_for_llm, statement_timeout_ms=s.statement_timeout_ms,
+                           max_rows=s.max_result_rows, memory_limit_mb=s.upload_query_memory_mb)
+
+
+@lru_cache
 def get_users() -> Users:
     return Users(get_app_engine())
 
@@ -130,9 +149,17 @@ def get_transcriber() -> Transcriber | None:
 
 def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_llm, sessions_factory=get_sessions,
                quota_factory=get_quota, messages_factory=get_messages, suggester_factory=get_suggester,
-               transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github) -> FastAPI:
+               transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github,
+               datasets_factory=get_datasets, dataset_analysts_factory=get_dataset_analysts) -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="NL Business Analytics Agent")
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        yield
+        if settings.uploads:
+            dataset_analysts_factory().close()  # their DuckDB files live on the local disk
+
+    app = FastAPI(title="NL Business Analytics Agent", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
     install(app)
 
@@ -180,11 +207,17 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
     app.include_router(v1_router(
         analyst=analyst_factory, messages=messages_factory, llm=llm_factory, suggester=suggester_factory,
         transcriber=transcriber_factory, identify=identify, spend=spend, turnstile_site_key=turnstile_site_key,
-        starters=starters, sign_in=lambda: github_factory() is not None,
+        starters=starters, sign_in=lambda: github_factory() is not None, datasets=dataset_analysts_factory,
+        upload_max_mb=settings.upload_max_mb if settings.uploads else None,
     ))
+    if settings.uploads:
+        app.include_router(datasets_router(
+            store=datasets_factory, analysts=dataset_analysts_factory, identify=identify, spend=spend,
+            limits=Limits(settings.upload_max_mb * 1024 * 1024, settings.upload_max_rows, settings.upload_max_columns),
+        ))
     app.include_router(auth_router(
         sessions=sessions_factory, github=github_factory, users=users_factory, messages=messages_factory,
-        public_url=settings.public_url, user_session_days=settings.user_session_days,
+        datasets=datasets_factory, public_url=settings.public_url, user_session_days=settings.user_session_days,
     ))
 
     @app.get("/api/config")

@@ -33,6 +33,7 @@ class MessageV1(BaseModel):
 
     id: UUID
     conversation_id: UUID
+    dataset_id: UUID | None = Field(default=None, description="The uploaded dataset it asked about; none for the demo data.")
     question: str
     answer: Answer
     suggestions: list[str] = Field(default_factory=list, description="Follow-up questions worth asking next.")
@@ -50,6 +51,7 @@ class ConversationV1(BaseModel):
 
     id: UUID
     title: str = Field(description="Its first question.")
+    dataset_id: UUID | None = Field(default=None, description="The uploaded dataset it is about; none for the demo data.")
     messages: int
     updated_at: datetime
 
@@ -62,8 +64,8 @@ class Messages:
         # A message still unanswered after this long is taken to have failed, and may be asked again.
         self._running_for = timedelta(seconds=running_for_s)
 
-    def begin(self, id: UUID, conversation_id: UUID, owner: str | None,
-              question: str) -> tuple[Literal["new", "running", "done"], MessageV1 | None]:
+    def begin(self, id: UUID, conversation_id: UUID, owner: str | None, question: str,
+              dataset_id: UUID | None = None) -> tuple[Literal["new", "running", "done"], MessageV1 | None]:
         """Claim `id` for a new question. Returns ("new", None) when the caller should answer it, ("running", None)
         while another request is answering it, or ("done", message) once it has been answered."""
         with self._engine.begin() as conn:
@@ -73,20 +75,22 @@ class Messages:
                     WHERE created_at < now() - CASE WHEN owner LIKE 'user:%' THEN :keep_users ELSE :keep END
                 """), {"keep": self._retention, "keep_users": self._user_retention})
             claimed = conn.execute(text("""
-                INSERT INTO app.messages (id, conversation_id, owner, question)
-                VALUES (:id, :conversation, :owner, :question)
+                INSERT INTO app.messages (id, conversation_id, owner, question, dataset_id)
+                VALUES (:id, :conversation, :owner, :question, :dataset)
                 ON CONFLICT (id) DO NOTHING RETURNING id
-            """), {"id": id, "conversation": conversation_id, "owner": owner, "question": question}).first()
+            """), {"id": id, "conversation": conversation_id, "owner": owner, "question": question,
+                   "dataset": dataset_id}).first()
             if claimed:
                 return "new", None
             row = conn.execute(text("""
-                SELECT conversation_id, owner, question, answer, created_at,
+                SELECT conversation_id, dataset_id, owner, question, answer, created_at,
                        answer IS NULL AND created_at < now() - :running AS stale
                 FROM app.messages WHERE id = :id FOR UPDATE
             """), {"id": id, "running": self._running_for}).first()
             if row is None:  # deleted between the two statements: treat as taken
                 return "running", None
-            if row.question != question or row.conversation_id != conversation_id or row.owner != owner:
+            if (row.question, row.conversation_id, row.owner, row.dataset_id) != (question, conversation_id, owner,
+                                                                                  dataset_id):
                 raise KeyReused()
             if row.answer is not None:
                 return "done", self._message(id, row)
@@ -95,17 +99,21 @@ class Messages:
                 return "new", None
             return "running", None
 
-    def history(self, conversation_id: UUID, owner: str | None, before: UUID, limit: int = 3) -> list[Turn]:
+    def history(self, conversation_id: UUID, owner: str | None, before: UUID, limit: int = 3,
+                dataset_id: UUID | None = None) -> list[Turn]:
         """The last answered turns of a conversation asked before message `before`, oldest first, each as it was
-        understood. Only the owner's own messages count, so a guessed conversation id reveals nothing."""
+        understood. Only the owner's own messages count, so a guessed conversation id reveals nothing, and only
+        those about the same data (`dataset_id`, or the demo's when None), since SQL about other tables would
+        mislead a follow-up."""
         with self._engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT answer FROM app.messages
                 WHERE conversation_id = :conversation AND owner IS NOT DISTINCT FROM :owner
-                  AND answer IS NOT NULL AND id <> :before
+                  AND dataset_id IS NOT DISTINCT FROM :dataset AND answer IS NOT NULL AND id <> :before
                   AND created_at <= (SELECT coalesce(max(created_at), now()) FROM app.messages WHERE id = :before)
                 ORDER BY created_at DESC LIMIT :limit
-            """), {"conversation": conversation_id, "owner": owner, "before": before, "limit": limit}).all()
+            """), {"conversation": conversation_id, "owner": owner, "before": before, "limit": limit,
+                                    "dataset": dataset_id}).all()
         return [Answer.model_validate(row.answer["answer"]).as_turn() for row in reversed(rows)]
 
     def finish(self, id: UUID, answer: Answer, suggestions: list[str]) -> MessageV1 | None:
@@ -113,7 +121,7 @@ class Messages:
         with self._engine.begin() as conn:
             row = conn.execute(text("""
                 UPDATE app.messages SET answer = CAST(:answer AS jsonb) WHERE id = :id
-                RETURNING conversation_id, owner, question, answer, created_at
+                RETURNING conversation_id, dataset_id, owner, question, answer, created_at
             """), {"id": id, "answer": json.dumps(stored)}).first()
         return self._message(id, row) if row else None
 
@@ -131,7 +139,7 @@ class Messages:
     def get(self, id: UUID, owner: str | None) -> MessageV1 | None:
         with self._engine.connect() as conn:
             row = conn.execute(text("""
-                SELECT conversation_id, owner, question, answer, created_at FROM app.messages
+                SELECT conversation_id, dataset_id, owner, question, answer, created_at FROM app.messages
                 WHERE id = :id AND answer IS NOT NULL AND owner IS NOT DISTINCT FROM :owner
             """), {"id": id, "owner": owner}).first()
         return self._message(id, row) if row else None
@@ -143,6 +151,7 @@ class Messages:
         with self._engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT conversation_id AS id, (array_agg(question ORDER BY created_at))[1] AS title,
+                       (array_agg(dataset_id ORDER BY created_at))[1] AS dataset_id,
                        COUNT(*) AS messages, max(created_at) AS updated_at
                 FROM app.messages WHERE owner = :owner AND answer IS NOT NULL
                 GROUP BY conversation_id ORDER BY updated_at DESC LIMIT :limit
@@ -155,7 +164,7 @@ class Messages:
             return []
         with self._engine.connect() as conn:
             rows = conn.execute(text("""
-                SELECT id, conversation_id, owner, question, answer, created_at FROM app.messages
+                SELECT id, conversation_id, dataset_id, owner, question, answer, created_at FROM app.messages
                 WHERE conversation_id = :conversation AND owner = :owner AND answer IS NOT NULL
                 ORDER BY created_at
             """), {"conversation": conversation_id, "owner": owner}).all()
@@ -186,5 +195,5 @@ class Messages:
 
     @staticmethod
     def _message(id: UUID, row) -> MessageV1:
-        return MessageV1(id=id, conversation_id=row.conversation_id, question=row.question,
+        return MessageV1(id=id, conversation_id=row.conversation_id, dataset_id=row.dataset_id, question=row.question,
                          answer=row.answer["answer"], suggestions=row.answer["suggestions"], created_at=row.created_at)

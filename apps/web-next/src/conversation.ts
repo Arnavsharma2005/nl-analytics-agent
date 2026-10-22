@@ -1,14 +1,18 @@
 /**
  * A conversation: the questions asked on this page and their answers, built up as each answer streams in.
  *
- * `useConversation()` is the one thing the UI needs: the turns so far, `ask(question)`, `retry(turn)`, `reset()`
- * and `open(id, messages)` to carry on an earlier conversation. Streaming, retries and cancelling a question when
- * the conversation changes all happen in here.
+ * `useConversation()` is the one thing the UI needs: the turns so far, `ask(question)`, `retry(turn)`, `reset()`,
+ * `open(id, messages, subject)` to carry on an earlier conversation, and `begin(subject)` to start asking about an
+ * uploaded file (or the demo data again). Streaming, retries and cancelling a question when the conversation
+ * changes all happen in here.
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ask as send } from "./api/ask";
 import { ApiError } from "./api/http";
-import type { ChartSpec, Message, StreamEvents } from "./api/types";
+import type { ChartSpec, Dataset, Message, StreamEvents } from "./api/types";
+
+/** What questions are about: the demo's sales data (null), an uploaded file, or an uploaded file since deleted. */
+export type Subject = Dataset | "gone" | null;
 
 export interface Turn {
   key: string;
@@ -85,6 +89,8 @@ export function useConversation() {
   const conversation = useRef<string>(crypto.randomUUID());
   const [conversationId, setConversationId] = useState(conversation.current);
   const controller = useRef(new AbortController());
+  const [subject, setSubject] = useState<Subject>(null);
+  const datasetId = useRef<string | null>(null);
 
   useEffect(() => {
     controller.current = new AbortController(); // a fresh one each mount: StrictMode mounts twice in development
@@ -94,7 +100,7 @@ export function useConversation() {
   const run = useCallback(async (key: string, question: string) => {
     const { signal } = controller.current;
     try {
-      const message = await send(conversation.current, question, {
+      const message = await send(conversation.current, question, datasetId.current, {
         step: (step) => dispatch({ type: "step", key, step }),
         table: (table) => dispatch({ type: "table", key, table }),
         chart: (chart) => dispatch({ type: "chart", key, chart }),
@@ -116,24 +122,36 @@ export function useConversation() {
   /** Ask a failed question again, as a new turn at the end. */
   const retry = useCallback((turn: Turn) => ask(turn.question), [ask]);
 
-  /** Stop whatever is streaming and continue in conversation `id` (a new one when not given). */
-  const switchTo = useCallback((id: string = crypto.randomUUID()) => {
+  /** Stop whatever is streaming and continue in conversation `id` (a new one when not given) about `about`. */
+  const switchTo = useCallback((about: Subject, id: string = crypto.randomUUID()) => {
     controller.current.abort();
     controller.current = new AbortController();
     conversation.current = id;
     setConversationId(id);
+    datasetId.current = about && about !== "gone" ? about.id : null;
+    setSubject(about);
   }, []);
 
+  /** Start a new conversation about the same data (the demo's, if the uploaded file is gone). */
   const reset = useCallback(() => {
-    switchTo();
+    switchTo(subject === "gone" ? null : subject);
+    dispatch({ type: "reset" });
+  }, [switchTo, subject]);
+
+  /** Start a new conversation about an uploaded file, or the demo data when `about` is null. */
+  const begin = useCallback((about: Dataset | null) => {
+    switchTo(about);
     dispatch({ type: "reset" });
   }, [switchTo]);
 
   /** Show an earlier conversation; questions asked next carry it on, follow-ups included. */
-  const open = useCallback((id: string, messages: Message[]) => {
-    switchTo(id);
+  const open = useCallback((id: string, messages: Message[], about: Subject) => {
+    switchTo(about, id);
     dispatch({ type: "load", turns: messages.map((m) => answered(fresh(m.id, m.question), m)) });
   }, [switchTo]);
 
-  return { turns, conversationId, ask, retry, reset, open, busy: turns.some((t) => t.status === "streaming") };
+  return {
+    turns, conversationId, subject, ask, retry, reset, begin, open,
+    busy: turns.some((t) => t.status === "streaming"),
+  };
 }

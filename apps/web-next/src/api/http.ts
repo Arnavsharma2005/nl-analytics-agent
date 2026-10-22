@@ -43,6 +43,21 @@ export async function postJSON<T>(path: string, body?: unknown): Promise<T | nul
   return r.status === 204 ? null : r.json();
 }
 
+export async function postForm<T>(path: string, form: FormData): Promise<T> {
+  const r = await fetch(path, { method: "POST", headers: { Accept: "application/json" }, body: form }).catch(() => {
+    throw offline();
+  });
+  if (!r.ok) throw await problemFrom(r);
+  return r.json();
+}
+
+export async function deleteJSON(path: string): Promise<void> {
+  const r = await fetch(path, { method: "DELETE", headers: { Accept: "application/json" } }).catch(() => {
+    throw offline();
+  });
+  if (!r.ok) throw await problemFrom(r);
+}
+
 export const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     const t = setTimeout(resolve, ms);

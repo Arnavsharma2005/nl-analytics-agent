@@ -17,7 +17,14 @@ class StreamBroken extends Error {}
 
 const MAX_TRIES = 3;
 
-export async function ask(conversationId: string, question: string, on: Handlers, signal?: AbortSignal): Promise<Message> {
+/** Ask `question` in conversation `conversationId`, about the uploaded file `datasetId` or else the demo data. */
+export async function ask(
+  conversationId: string,
+  question: string,
+  datasetId: string | null,
+  on: Handlers,
+  signal?: AbortSignal,
+): Promise<Message> {
   await ensureSession();
   const key = crypto.randomUUID();
   let renewed = false;
@@ -27,7 +34,7 @@ export async function ask(conversationId: string, question: string, on: Handlers
       r = await fetch(`/v1/conversations/${conversationId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream", "Idempotency-Key": key },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify(datasetId ? { question, dataset_id: datasetId } : { question }),
         signal,
       });
     } catch (e) {
