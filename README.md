@@ -226,6 +226,12 @@ hard). They are split in two:
 
 The first 30 questions are the original v1 set; they are all in dev.
 
+The new web app's accuracy page at `/eval` publishes the results: the
+latest run over every held-out question, broken down by difficulty and kind, each question with the SQL it ran,
+and every earlier run. It is built only from runs committed to `eval/results/`, so every figure on it can be
+checked. After committing a run, `python eval/publish.py` updates the page's data; CI fails if it is out of date.
+Replays of a recorded run are left out, since they measure nothing new.
+
 ```bash
 python eval/run_eval.py              # runs all 120 through the full agent (uses the fallback chain)
 python eval/run_eval.py --split test # only the held-out questions
