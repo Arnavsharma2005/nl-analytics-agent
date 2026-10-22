@@ -113,6 +113,45 @@ def test_out_of_scope_questions_suggest_starters(make, db, app_tables):
     assert body["suggestions"] == starters[:3]
 
 
+def standalone_prompts(llm: FakeLLM) -> list[str]:
+    return [user for name, user in llm.calls if name == "Standalone"]
+
+
+def test_a_follow_up_is_read_with_the_earlier_questions_of_its_conversation(make, llm):
+    client, conversation = make(), uuid.uuid4()
+    ask(client, "Revenue by region", conversation=conversation, stream=False)
+    assert standalone_prompts(llm) == []  # a first question is asked on its own
+    llm.standalone = "Revenue by region in 2024"
+    done = events(ask(client, "and only for 2024?", conversation=conversation))[-1][1]
+    (prompt,) = standalone_prompts(llm)
+    assert "1. Revenue by region" in prompt and "SQL: SELECT r.name AS region" in prompt and "North leads." in prompt
+    assert done["question"] == "and only for 2024?"
+    assert done["answer"]["standalone_question"] == "Revenue by region in 2024"
+    # the next follow-up sees the earlier one as it was understood
+    ask(client, "and 2023?", conversation=conversation, stream=False)
+    assert "2. Revenue by region in 2024" in standalone_prompts(llm)[-1]
+
+
+def test_other_conversations_and_sessions_are_not_history(make, llm):
+    owner, stranger, conversation = make(), make(), uuid.uuid4()
+    ask(owner, conversation=conversation, stream=False)
+    ask(owner, conversation=uuid.uuid4(), stream=False)
+    ask(stranger, conversation=conversation, stream=False)
+    assert standalone_prompts(llm) == []
+
+
+def test_a_follow_up_is_answered_on_its_own_when_history_cannot_be_read(make, llm, app_tables):
+    class NoHistory(Messages):
+        def history(self, *args, **kwargs):
+            raise RuntimeError("database down")
+
+    client, conversation = make(messages=NoHistory(app_tables)), uuid.uuid4()
+    ask(client, conversation=conversation, stream=False)
+    r = ask(client, "and only for 2024?", conversation=conversation, stream=False)
+    assert r.status_code == 200 and r.json()["answer"]["standalone_question"] is None
+    assert standalone_prompts(llm) == []
+
+
 def test_a_retry_with_the_same_key_replays_without_asking_again(make, llm, app_tables):
     client = make(quota=Quota(Counters(app_tables), per_session_hour=1, per_ip_day=0))
     key, conversation = uuid.uuid4(), uuid.uuid4()

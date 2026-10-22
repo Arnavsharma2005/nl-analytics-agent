@@ -31,6 +31,12 @@ question ─► Router agent ──► out of scope ─► polite reply
 
 Queries run inside a `READ ONLY` transaction with a 10 s statement timeout and a 500-row cap.
 
+**Follow-up questions.** In `/v1`, a question asked after others in the same conversation ("and for 2024?",
+"just the top 3") is first rewritten to stand on its own, using the last three questions as they were understood
+and the SQL and answers they got (`app/agents/followup.py`, one call to the fast model). The rest of the pipeline
+then answers the rewrite exactly as it answers a first question, and the answer shows it as "Understood as: ...".
+A first question skips this step, so it is answered as before. See [ADR 0002](docs/adr/0002-conversation-memory-from-stored-messages.md).
+
 **Stack:** Python, LangGraph, LangChain, FastAPI, PostgreSQL, SQLAlchemy, sqlglot, React, TypeScript, Recharts, Docker, Railway, GitHub Actions.
 
 ## Model fallback chain
@@ -187,6 +193,18 @@ python eval/run_eval.py              # runs all 120 through the full agent (uses
 python eval/run_eval.py --split test # only the held-out questions
 python eval/run_eval.py --delay 4    # slower, to stay under free-tier rate limits
 python eval/run_eval.py --gold-only  # check every gold query runs (no LLM needed; part of CI)
+```
+
+`eval/conversations.yaml` holds 10 conversations (26 turns) for follow-up questions, split into dev and test the
+same way. Each follow-up is labelled with what it does (adds a filter, changes the period, the metric or the
+grouping, narrows to one group, changes the cut-off, or starts something new that must not inherit anything) and
+has gold SQL for the question as it should be understood. Each turn is asked with the answers to the ones before it
+and scored like a single question; the results split first turns from follow-ups.
+
+```bash
+python eval/run_eval.py --conversations              # all 26 turns
+python eval/run_eval.py --conversations --split test # the held-out conversations
+python eval/run_eval.py --conversations --gold-only  # part of CI
 ```
 
 A prediction counts as correct when its result matches the gold result: same rows, values within rounding,

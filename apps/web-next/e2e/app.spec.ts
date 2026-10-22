@@ -42,6 +42,23 @@ test("typing a question and pressing Enter asks it", async ({ page }) => {
   expect(api.asked[0].question).toBe("Top 5 customers by revenue");
 });
 
+test("a follow-up shows how it was understood with the earlier questions", async ({ page }) => {
+  const api = await mockApi(page, {
+    answer: (key, conversation, question) => {
+      const m = message(key, conversation, question);
+      if (question === "and in 2024?") m.answer.standalone_question = "Revenue by region in 2024";
+      return { body: sse(answerEvents(m)) };
+    },
+  });
+  await askStarter(page);
+  await expect(page.getByText("Understood as:")).toHaveCount(0);
+  const box = page.getByRole("textbox", { name: "Your question" });
+  await box.fill("and in 2024?");
+  await box.press("Enter");
+  await expect(page.getByText("Understood as: Revenue by region in 2024")).toBeVisible();
+  expect(new Set(api.asked.map((a) => a.conversation)).size).toBe(1); // both asked in one conversation
+});
+
 test("a dropped stream is sent again with the same idempotency key", async ({ page }) => {
   const api = await mockApi(page, {
     answer: (key, conversation, question, attempt) => {
@@ -113,11 +130,14 @@ test("a sleeping server is announced while it wakes", async ({ page }) => {
   await expect(page.getByText("The server is waking up")).toBeVisible();
 });
 
-test("New conversation clears the answers", async ({ page }) => {
-  await mockApi(page);
+test("New conversation clears the answers and forgets the earlier questions", async ({ page }) => {
+  const api = await mockApi(page);
   await askStarter(page);
   await page.getByRole("button", { name: "New conversation" }).click();
   await expect(page.getByRole("heading", { name: "What do you want to know about the store's sales?" })).toBeVisible();
+  await page.getByRole("button", { name: STARTERS[0] }).click(); // on the same page, not a reload
+  await expect(page.getByText("Ask next")).toBeVisible();
+  expect(api.asked[1].conversation).not.toBe(api.asked[0].conversation);
 });
 
 for (const scheme of ["light", "dark"] as const) {

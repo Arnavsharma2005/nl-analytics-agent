@@ -389,6 +389,11 @@ export interface components {
             sql: string | null;
             /** Sql Reasoning */
             sql_reasoning: string | null;
+            /**
+             * Standalone Question
+             * @description A follow-up question as it was understood with the earlier ones in its conversation.
+             */
+            standalone_question: string | null;
             /** Summary */
             summary: string | null;
             /**

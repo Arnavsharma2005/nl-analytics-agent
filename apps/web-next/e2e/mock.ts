@@ -37,6 +37,7 @@ export function message(id: string, conversation: string, question = "Revenue by
       verified_question: null,
       assumptions: ["revenue means completed orders only"],
       summary_verified: true,
+      standalone_question: null,
     },
   };
 }
@@ -60,7 +61,7 @@ export function answerEvents(m: Message): Events {
 }
 
 export interface Api {
-  asked: { question: string; key: string | null }[];
+  asked: { question: string; key: string | null; conversation: string }[];
   feedback: unknown[];
   /** Replace how a question is answered: return the response body, or a problem for an error. */
   answer: (key: string, conversation: string, question: string, attempt: number) => { status?: number; body: string; headers?: Record<string, string> };
@@ -90,10 +91,10 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     const req = route.request();
     const key = req.headers()["idempotency-key"] ?? null;
     const { question } = req.postDataJSON();
-    api.asked.push({ question, key });
+    const conversation = new URL(req.url()).pathname.split("/")[3];
+    api.asked.push({ question, key, conversation });
     const attempt = (attempts.get(key ?? "") ?? 0) + 1;
     attempts.set(key ?? "", attempt);
-    const conversation = new URL(req.url()).pathname.split("/")[3];
     const r = api.answer(key!, conversation, question, attempt);
     return route.fulfill({
       status: r.status ?? 200,

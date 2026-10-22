@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from app.agents.followup import Turn
 from app.analyst import Answer
 
 log = logging.getLogger(__name__)
@@ -77,6 +78,19 @@ class Messages:
                 conn.execute(text("UPDATE app.messages SET created_at = now() WHERE id = :id"), {"id": id})
                 return "new", None
             return "running", None
+
+    def history(self, conversation_id: UUID, session: str | None, before: UUID, limit: int = 3) -> list[Turn]:
+        """The last answered turns of a conversation asked before message `before`, oldest first, each as it was
+        understood. Only the session's own messages count, so a guessed conversation id reveals nothing."""
+        with self._engine.connect() as conn:
+            rows = conn.execute(text("""
+                SELECT answer FROM app.messages
+                WHERE conversation_id = :conversation AND session IS NOT DISTINCT FROM :session
+                  AND answer IS NOT NULL AND id <> :before
+                  AND created_at <= (SELECT coalesce(max(created_at), now()) FROM app.messages WHERE id = :before)
+                ORDER BY created_at DESC LIMIT :limit
+            """), {"conversation": conversation_id, "session": session, "before": before, "limit": limit}).all()
+        return [Answer.model_validate(row.answer["answer"]).as_turn() for row in reversed(rows)]
 
     def finish(self, id: UUID, answer: Answer, suggestions: list[str]) -> MessageV1 | None:
         stored = {"answer": json.loads(answer.model_dump_json()), "suggestions": suggestions}
