@@ -19,8 +19,9 @@ export async function askStream(question: string, onStep: (s: Step) => void, sig
     signal,
   });
   if (!r.ok || !r.body) {
-    const detail = await r.text().catch(() => "");
-    throw new Error(`Request failed (${r.status}) ${detail}`.trim());
+    // Errors are problem details (docs/errors.md); show the human-readable part.
+    const problem = await r.json().catch(() => null);
+    throw new Error(problem?.detail ?? problem?.title ?? `Request failed (${r.status})`);
   }
   const reader = r.body.getReader();
   const decoder = new TextDecoder();

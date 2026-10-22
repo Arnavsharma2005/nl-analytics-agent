@@ -87,6 +87,8 @@ Or run everything in containers: `docker compose up --build`, then open http://l
 
 ## API
 
+Errors are [problem details](docs/errors.md) with a stable `code` to branch on.
+
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/ask` | `{"question": "..."}` → chart spec, summary, SQL, rows, attempts, timings |
@@ -155,14 +157,9 @@ Step-by-step instructions, including where to get each API key, are in [DEPLOY.m
 2. On the service, set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`, plus the API keys from `.env.example`.
 3. Deploy. The pre-deploy step seeds the database on first deploy and skips it afterwards.
 
-For a public demo, connect with a read-only role:
-
-```sql
-CREATE ROLE analytics_reader LOGIN PASSWORD '...';
-GRANT CONNECT ON DATABASE railway TO analytics_reader;
-GRANT USAGE ON SCHEMA public TO analytics_reader;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO analytics_reader;
-```
+For a public demo, connect as a read-only role. `apps/api/db/roles.sql` creates one (`analyst_ro`) that can only
+`SELECT` from `public`, with read-only transactions and a timeout enforced by the database. How the agent is kept
+safe is described in [SECURITY.md](SECURITY.md).
 
 ## Project layout
 
