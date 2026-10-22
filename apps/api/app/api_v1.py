@@ -83,7 +83,8 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
     def suggestions(answer: Answer) -> list[str]:
         if answer.intent != "data_query" or answer.error:
             return starters()[:3]
-        return [q for q in suggester().related(answer.question) if q != answer.verified_question][:3]
+        asked = answer.standalone_question or answer.question
+        return [q for q in suggester().related(asked) if q != answer.verified_question][:3]
 
     async def store(call, *args):
         """Run a message-store call off the event loop; None (and a log line) if the app database is down."""
@@ -130,6 +131,10 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
                 if store_ok:
                     await store(messages().abandon, message_id)
                 raise
+        # Earlier turns let a follow-up ("and last year?") be understood; without them it is asked on its own.
+        history = []
+        if state == "new" and store_ok:
+            history = await store(messages().history, conversation_id, visitor.session, message_id) or []
 
         async def finish(answer: Answer) -> MessageV1:
             follow_ups = await asyncio.to_thread(suggestions, answer)
@@ -141,7 +146,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
             if stored:
                 return stored
             try:
-                answer = await asyncio.to_thread(analyst().ask, question)
+                answer = await asyncio.to_thread(analyst().ask, question, history)
             except Exception:
                 if store_ok:
                     await store(messages().abandon, message_id)
@@ -156,7 +161,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
                 yield _sse("done", stored.model_dump_json())
                 return
             try:
-                async for event in analyst().stream(question):
+                async for event in analyst().stream(question, history):
                     if isinstance(event, Step):
                         yield _sse("step", {"node": event.node, "label": event.label})
                     elif isinstance(event, Table):

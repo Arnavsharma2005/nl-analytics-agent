@@ -13,12 +13,14 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.chart import ChartSpec
+from app.agents.followup import Turn
 from app.context import Context
 from app.db import DataSource
 from app.graph import build_graph
 from app.llm import LLM
 
 STEP_LABELS = {
+    "followup": "Reading it with the earlier questions",
     "router": "Understanding the question",
     "context": "Looking up similar questions",
     "verified": "Using a verified query",
@@ -74,12 +76,20 @@ class Answer(BaseModel):
         default_factory=list, description="How an ambiguous question was read, in plain words.")
     summary_verified: bool | None = Field(
         default=None, description="Whether every figure in the summary was found in the result (None: not checked).")
+    standalone_question: str | None = Field(
+        default=None, description="A follow-up question as it was understood with the earlier ones in its conversation.")
+
+    def as_turn(self) -> Turn:
+        """This answer as an earlier turn of its conversation, for reading the questions after it."""
+        return Turn(question=self.standalone_question or self.question, sql=self.sql,
+                    summary=self.summary or self.answer)
 
     @classmethod
     def from_state(cls, state: dict[str, Any]) -> "Answer":
         data_query = state.get("intent") == "data_query"
         return cls(
-            question=state.get("question", ""),
+            question=state.get("asked") or state.get("question", ""),
+            standalone_question=state.get("question") if state.get("asked") else None,
             intent=state.get("intent"),
             answer=state.get("answer"),
             sql=state.get("sql") if data_query else None,
@@ -170,21 +180,36 @@ class Analyst:
                                   context=context, check_results=check_results, check_summaries=check_summaries)
         self._cache = cache
 
-    def ask(self, question: str) -> Answer:
+    def ask(self, question: str, history: list[Turn] | None = None) -> Answer:
+        """Answer one question. `history` holds the earlier turns of its conversation, oldest first: a follow-up
+        is then rewritten to stand on its own before it is answered (see Answer.standalone_question)."""
         question = question.strip()
-        if self._cache and (hit := self._cache.get(question)):
+        if self._cache and not history and (hit := self._cache.get(question)):
             return hit
-        answer = Answer.from_state(self._graph.invoke({"question": question}))
+        answer = Answer.from_state(self._graph.invoke(self._input(question, history)))
         if self._cache:
-            self._cache.put(question, answer)
+            self._cache.put(*self._cache_entry(answer))
         return answer
 
-    async def stream(self, question: str) -> AsyncIterator[Step | Table | Chart | Token | Done]:
+    @staticmethod
+    def _input(question: str, history: list[Turn] | None) -> dict[str, Any]:
+        return {"question": question, "history": list(history)} if history else {"question": question}
+
+    @staticmethod
+    def _cache_entry(answer: Answer) -> tuple[str, Answer]:
+        """A follow-up's answer is kept under the question it was understood as, so asking that directly finds it."""
+        if not answer.standalone_question:
+            return answer.question, answer
+        return answer.standalone_question, answer.model_copy(
+            update={"question": answer.standalone_question, "standalone_question": None})
+
+    async def stream(self, question: str, history: list[Turn] | None = None
+                     ) -> AsyncIterator[Step | Table | Chart | Token | Done]:
         """Events as the answer takes shape: a Step as each step finishes, the Table once the query has run, the
-        Chart, the summary as Tokens, and finally Done with the whole Answer."""
+        Chart, the summary as Tokens, and finally Done with the whole Answer. `history` is as for `ask`."""
         question = question.strip()
         # The cache does blocking database calls, so keep them off the event loop.
-        if self._cache and (hit := await asyncio.to_thread(self._cache.get, question)):
+        if self._cache and not history and (hit := await asyncio.to_thread(self._cache.get, question)):
             yield Step("cache", STEP_LABELS["cache"])
             if hit.intent == "data_query":
                 yield Table(hit.columns, hit.rows, hit.truncated)
@@ -196,7 +221,7 @@ class Analyst:
             return
         final: dict[str, Any] = {}
         modes = ["updates", "values", "custom"]
-        async for mode, chunk in self._graph.astream({"question": question}, stream_mode=modes):
+        async for mode, chunk in self._graph.astream(self._input(question, history), stream_mode=modes):
             if mode == "updates":
                 for node, update in chunk.items():
                     yield Step(node, STEP_LABELS.get(node, node))
@@ -213,5 +238,5 @@ class Analyst:
                 final = chunk
         answer = Answer.from_state(final)
         if self._cache:
-            await asyncio.to_thread(self._cache.put, question, answer)
+            await asyncio.to_thread(self._cache.put, *self._cache_entry(answer))
         yield Done(answer)

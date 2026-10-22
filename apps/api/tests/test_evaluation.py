@@ -33,3 +33,19 @@ def test_gold_questions_run(db):
     assert len({q["question"].lower() for q in questions}) == len(questions)
     for q in questions:
         assert db.run(q["gold_sql"]).rows, f"gold query {q['id']} returned no rows"
+
+
+def test_conversation_turns_run_and_each_follow_up_says_what_it_does(db):
+    from pathlib import Path
+
+    import yaml
+
+    conversations = yaml.safe_load((Path(__file__).resolve().parents[3] / "eval" / "conversations.yaml").read_text())
+    assert [c["id"] for c in conversations] == list(range(1, len(conversations) + 1))
+    assert {c["split"] for c in conversations} == {"dev", "test"}
+    kinds = {"refine", "period", "metric", "dimension", "drill", "rank", "fresh"}
+    for c in conversations:
+        first, *follow_ups = c["turns"]
+        assert follow_ups and "kind" not in first and all(t["kind"] in kinds for t in follow_ups), c["id"]
+        for t in c["turns"]:
+            assert db.run(t["gold_sql"]).rows, f"gold query for {t['question']!r} returned no rows"

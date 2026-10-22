@@ -42,7 +42,9 @@ jobs:
       - name: The web app's copy of the OpenAPI spec is up to date
         run: python apps/api/scripts/export_openapi.py --check
       - name: Every gold query in the eval set runs
-        run: python eval/run_eval.py --gold-only
+        run: |
+          python eval/run_eval.py --gold-only
+          python eval/run_eval.py --conversations --gold-only
       - name: Replay the recorded eval run; fail if any question regressed
         if: hashFiles('eval/baseline/cassette.json') != ''
         run: |

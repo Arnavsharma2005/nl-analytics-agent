@@ -97,6 +97,9 @@ export default function AnswerView({ turn, onAsk, onRetry, onInspect, inspecting
   return (
     <article className="border-t border-rule py-8 first:border-0 first:pt-2" aria-labelledby={`q-${turn.key}`}>
       <h2 id={`q-${turn.key}`} className="mb-4 text-xl font-semibold text-ink">{turn.question}</h2>
+      {answer?.standalone_question && (
+        <p className="-mt-3 mb-4 text-sm text-muted">Understood as: {answer.standalone_question}</p>
+      )}
 
       {streaming && !turn.summary && <StepTrail steps={turn.steps} />}
 

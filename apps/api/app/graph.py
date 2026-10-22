@@ -1,4 +1,8 @@
-"""The LangGraph pipeline: router -> [context] -> SQL (with validate/repair loop) -> execute -> chart -> summary.
+"""The LangGraph pipeline: [followup] -> router -> [context] -> SQL (with validate/repair loop) -> execute -> chart
+-> summary.
+
+A question asked with earlier turns of its conversation is first rewritten to stand on its own (app.agents.followup);
+without them the pipeline starts at the router, exactly as for a single question.
 
 With a `Context`, data questions first collect their context (verified examples, values they name); a question
 a verified query answers outright skips the SQL agent. `check_results` sends a query that finds nothing back to the
@@ -14,6 +18,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.chart import choose_chart
+from app.agents.followup import Turn, standalone
 from app.agents.router import answer_schema_question, route
 from app.agents.sql_agent import write_sql
 from app.agents.summary import stream_summary, summarize
@@ -38,7 +43,9 @@ def _add_timings(a: dict[str, float], b: dict[str, float]) -> dict[str, float]:
 
 
 class AnalyticsState(TypedDict, total=False):
-    question: str
+    question: str  # as the pipeline understands it: a follow-up is rewritten to stand on its own
+    asked: str  # the follow-up as it was asked, when it was rewritten
+    history: list[Turn]  # earlier turns of the conversation, oldest first
     intent: str
     route_reason: str
     sql: str
@@ -91,6 +98,11 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
 
     def timed(name: str):
         return _timed(name, llm)
+
+    @timed("followup")
+    def followup_node(state: AnalyticsState):
+        rewritten = standalone(llm, state["question"], state["history"])
+        return {} if rewritten == state["question"] else {"question": rewritten, "asked": state["question"]}
 
     @timed("router")
     def router_node(state: AnalyticsState):
@@ -210,6 +222,7 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
         return decide
 
     g = StateGraph(AnalyticsState)
+    g.add_node("followup", followup_node)
     g.add_node("router", router_node)
     g.add_node("schema_answer", schema_node)
     g.add_node("out_of_scope", out_of_scope_node)
@@ -220,7 +233,9 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     g.add_node("summary_agent", summary_node)
     g.add_node("give_up", give_up_node)
 
-    g.add_edge(START, "router")
+    g.add_conditional_edges(START, lambda state: "followup" if state.get("history") else "router",
+                            ["followup", "router"])
+    g.add_edge("followup", "router")
     if context:
         g.add_node("context", context_node)
         g.add_node("verified", verified_node)

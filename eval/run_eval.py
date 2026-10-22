@@ -6,6 +6,7 @@ Usage (from the repo root, with DATABASE_URL and an LLM key set):
     python eval/run_eval.py --ids 1 5 17    # a subset
     python eval/run_eval.py --gold-only     # just check that every gold query runs (no LLM needed)
     python eval/run_eval.py --delay 4       # pause between questions to stay under free-tier rate limits
+    python eval/run_eval.py --conversations # the multi-turn set: each turn is asked with the ones before it
 
 Each run is written to eval/results/<date>-<commit>.json (or --out); compare two runs with eval/compare.py.
 
@@ -47,9 +48,22 @@ def git_commit() -> str:
         return "unknown"
 
 
+def conversation_turns(conversations: list[dict]) -> list[dict]:
+    """Every turn of the multi-turn set as a question of its own, with the conversation it belongs to. Turns are
+    tallied by what the follow-up does (`kind`) and by whether they are a first turn or a follow-up."""
+    turns = []
+    for c in conversations:
+        for n, t in enumerate(c["turns"], 1):
+            turns.append({**t, "id": f"{c['id']}.{n}", "conversation": c["id"], "split": c["split"],
+                          "category": t.get("kind", "first"), "difficulty": "follow-up" if n > 1 else "first turn"})
+    return turns
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--questions", default=str(ROOT / "eval" / "questions.yaml"))
+    parser.add_argument("--questions", help="the question set (default eval/questions.yaml)")
+    parser.add_argument("--conversations", action="store_true",
+                        help="run the multi-turn set (default eval/conversations.yaml); --ids then picks conversations")
     parser.add_argument("--ids", type=int, nargs="*")
     parser.add_argument("--split", choices=["dev", "test"], help="only the dev (tuning) or test (held-out) questions")
     parser.add_argument("--gold-only", action="store_true")
@@ -63,9 +77,12 @@ def main() -> int:
     settings = get_settings()
     db = Database(settings.database_url, settings.statement_timeout_ms, max_rows=10_000,
                   max_cost=settings.max_query_cost, personal_columns=settings.personal_data_columns)
-    questions = yaml.safe_load(Path(args.questions).read_text())
+    default = "conversations.yaml" if args.conversations else "questions.yaml"
+    questions = yaml.safe_load(Path(args.questions or ROOT / "eval" / default).read_text())
     if args.ids:
         questions = [q for q in questions if q["id"] in set(args.ids)]
+    if args.conversations:
+        questions = conversation_turns(questions)
     if args.split:
         questions = [q for q in questions if q["split"] == args.split]
 
@@ -100,22 +117,26 @@ def main() -> int:
                       context=context, check_results=settings.check_results, check_summaries=settings.check_summaries)
 
     results = []
+    history: dict[int, list] = defaultdict(list)  # earlier turns of each conversation, as the app keeps them
     for i, q in enumerate(questions):
         if i and args.delay and not args.replay:
             time.sleep(args.delay)
         gold = db.run(q["gold_sql"]).rows
         start = time.perf_counter()
         try:
-            answer = analyst.ask(q["question"])
+            answer = analyst.ask(q["question"], history.get(q.get("conversation")))
             error = answer.error
         except Exception as e:  # noqa: BLE001 - one bad question should not stop the run
             answer, error = None, f"{type(e).__name__}: {e}"
         latency = time.perf_counter() - start
+        if answer and "conversation" in q:
+            history[q["conversation"]].append(answer.as_turn())
         pred = answer.rows if answer and answer.intent == "data_query" else None
         correct = pred is not None and not error and results_match(gold, pred, q.get("ordered", False))
         results.append({
             "id": q["id"], "category": q["category"], "difficulty": q["difficulty"], "split": q["split"],
             "question": q["question"], "correct": correct,
+            "understood_as": answer.standalone_question if answer else None,
             "intent": answer.intent if answer else None, "sql": answer.sql if answer else None,
             "attempts": answer.attempts if answer else 0, "latency_s": round(latency, 2), "error": error,
             "verified": bool(answer and answer.verified_question),

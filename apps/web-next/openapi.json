@@ -144,6 +144,18 @@
             ],
             "title": "Sql Reasoning"
           },
+          "standalone_question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A follow-up question as it was understood with the earlier ones in its conversation.",
+            "title": "Standalone Question"
+          },
           "summary": {
             "anyOf": [
               {
@@ -212,7 +224,8 @@
           "cached",
           "verified_question",
           "assumptions",
-          "summary_verified"
+          "summary_verified",
+          "standalone_question"
         ],
         "title": "Answer",
         "type": "object"

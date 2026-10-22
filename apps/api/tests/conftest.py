@@ -17,13 +17,14 @@ class FakeLLM:
     `sql` is a list of queries returned on successive SQL-agent calls (the last one repeats)."""
 
     def __init__(self, intent="data_query", sql=("SELECT 1 AS n",), chart=None, summary="Summary.", schema_answer="We have sales data.",
-                 assumptions=()):
+                 assumptions=(), standalone=None):
         self.intent = intent
         self.sql = list(sql)
         self.chart = chart
         self.summary = summary
         self.schema_answer = schema_answer
         self.assumptions = list(assumptions)
+        self.standalone = standalone  # the rewritten follow-up; None returns the latest message unchanged
         self.systems: list[tuple[str, str]] = []
         self.calls: list[tuple[str, str]] = []
         self.tiers: list[tuple[str, str]] = []
@@ -38,6 +39,8 @@ class FakeLLM:
             n = sum(1 for name, _ in self.calls if name.endswith("SQLDraft"))
             extra = {"assumptions": self.assumptions} if output is not SQLDraft else {}
             return output(reasoning="test", sql=self.sql[min(n, len(self.sql)) - 1], **extra)
+        if output.__name__ == "Standalone":
+            return output(question=self.standalone or user.rsplit("Latest message: ", 1)[1])
         if output.__name__ == "Explanation":
             return output(steps=["Add up the sales of completed orders.", "Split them by region."])
         if output is ChartSpec:
