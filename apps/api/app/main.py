@@ -171,6 +171,18 @@ def get_transcriber() -> Transcriber | None:
     return Transcriber(s.groq_api_key, s.transcribe_model)
 
 
+def check_data_access(db: Database, required: bool) -> None:
+    """Say so when the data connection could change data; refuse to start when it must only read."""
+    reasons = db.write_access()
+    if not reasons:
+        return
+    message = ("DATABASE_URL can change data: " + "; ".join(reasons) + ". Connect as a role that can only SELECT "
+               "(docs/self-host.md shows how).")
+    if required:
+        raise RuntimeError(message + " Refusing to start because REQUIRE_READ_ONLY_DATA is on.")
+    log.warning(message)
+
+
 def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_llm, sessions_factory=get_sessions,
                quota_factory=get_quota, messages_factory=get_messages, suggester_factory=get_suggester,
                transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github,
@@ -183,6 +195,8 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        if settings.database_url != settings.app_db_url:  # your own data, apart from the app's tables
+            check_data_access(db_factory(), settings.require_read_only_data)
         async with AsyncExitStack() as stack:
             if mcp:
                 await stack.enter_async_context(mcp.session_manager.run())
@@ -348,7 +362,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         return EventSourceResponse(events())
 
     # In production the built React app is served from the same origin.
-    dist = Path(__file__).resolve().parents[3] / "apps" / "web" / "dist"
+    dist = Path(__file__).resolve().parents[3] / "apps" / ("web-next" if settings.web_app == "next" else "web") / "dist"
     if dist.exists():
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
 

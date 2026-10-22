@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -123,6 +124,17 @@ class Settings(BaseSettings):
     public_url: str | None = None
     # How long a sign-in lasts.
     user_session_days: int = 30
+    # --- Self-hosting on your own data (docs/self-host.md). ----------------------------------------------------
+    # Load the demo's sample sales data into DATABASE_URL on start when it isn't there. Turn off for your own data.
+    sample_data: bool = True
+    # A folder with your own metrics.yml and queries.yml, in place of the demo's.
+    semantic_dir: Path | None = None
+    # Refuse to start when DATABASE_URL can change data (a superuser, or write or CREATE rights). Queries already
+    # run in read-only transactions; this makes sure the connection itself can't write either.
+    require_read_only_data: bool = False
+    # Which web app to serve at /: "classic" (apps/web) or "next" (apps/web-next).
+    web_app: Literal["classic", "next"] = "classic"
+
     # An MCP server at /mcp for Claude Desktop and other agents (app/api_mcp.py), limited per IP address.
     mcp: bool = False
     # GitHub logins (lowercase or not) that may use the Curator, as a JSON list: ["arnavsharma2005"].

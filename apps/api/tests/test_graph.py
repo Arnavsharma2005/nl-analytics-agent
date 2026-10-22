@@ -1,6 +1,6 @@
 from app.agents.chart import ChartSpec
 from app.analyst import Analyst
-from app.brief import demo
+from app.brief import database
 
 from .conftest import FakeLLM
 
@@ -58,7 +58,7 @@ def test_gives_up_after_max_attempts(db):
 def test_out_of_scope_skips_sql(db):
     llm = FakeLLM(intent="out_of_scope")
     out = run(llm, db, "What's the weather in Bengaluru?")
-    assert out.answer == demo().out_of_scope
+    assert out.answer == database().out_of_scope
     assert out.sql is None
     assert [name for name, _ in llm.calls] == ["RouteDecision"]
 

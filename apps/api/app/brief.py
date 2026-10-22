@@ -1,6 +1,6 @@
 """What the agents are told about the data besides its schema and SQL dialect: what it is, its business rules and how
-to write its money. The demo's brief describes the store's sales database; an uploaded file gets a
-plainer one (app/datasets)."""
+to write its money. The connected database's brief comes from its semantic folder (the demo's describes
+the store's sales); an uploaded file gets a plainer one (app/datasets)."""
 
 from dataclasses import dataclass
 
@@ -16,15 +16,9 @@ class Brief:
     out_of_scope: str  # the reply to a question about something else
 
 
-def demo() -> Brief:
-    """The store's sales data that the public demo answers questions about."""
-    return Brief(
-        about="an e-commerce database",
-        rules=semantic.load().rules_text(),
-        time_column="order_date",
-        money="Money is in Indian rupees; write amounts like ₹1.2 Cr, ₹45.3 L or ₹8,450.",
-        out_of_scope=(
-            "I can only answer questions about the sales data: orders, revenue, products, categories, customers and "
-            "regions for 2024-2025. Try something like \"Monthly revenue in 2025\" or \"Top 5 products by profit\"."
-        ),
-    )
+def database() -> Brief:
+    """The connected database: the demo's store, or your own when SEMANTIC_DIR says what it is (semantic/metrics.yml)."""
+    library = semantic.load()
+    about = library.about
+    return Brief(about=about.data, rules=library.rules_text(), time_column=about.time_column, money=about.money,
+                 out_of_scope=about.out_of_scope)

@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.chart import ChartSpec
 from app.agents.followup import Turn
-from app.brief import Brief, demo
+from app.brief import Brief, database
 from app.context import Context
 from app.db import DataSource
 from app.graph import build_graph
@@ -164,7 +164,7 @@ class Analyst:
     """Answers business questions over one data source.
 
     Construction introspects the data source's schema once, so build one Analyst per data source and reuse it.
-    `brief` says what the data is (app.brief); without one it is the demo's sales database.
+    `brief` says what the data is (app.brief); without one it is the connected database's.
     Email addresses and phone numbers in results are always masked (see app/privacy.py).
     `ask` and `stream` raise `AllProvidersFailed` when no model provider can classify the question; failures
     later in the pipeline are reported inside the Answer instead.
@@ -179,7 +179,7 @@ class Analyst:
                  rows_for_llm: int = 50, cache: Cache | None = None, context: Context | None = None,
                  check_results: bool = False, check_summaries: bool = False):
         self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm,
-                                  brief=brief or demo(), context=context, check_results=check_results,
+                                  brief=brief or database(), context=context, check_results=check_results,
                                   check_summaries=check_summaries)
         self._cache = cache
 
