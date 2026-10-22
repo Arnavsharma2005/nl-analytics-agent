@@ -24,7 +24,7 @@ from app.agents.explain import explain_sql
 from app.analyst import Analyst, Answer, Chart, Done, Step, Table, Token
 from app.context import Context
 from app.llm import LLM
-from app.messages import KeyReused, Messages, MessageV1
+from app.messages import ConversationV1, KeyReused, Messages, MessageV1
 from app.problems import Problem, from_exception
 from app.transcribe import AUDIO_TYPES, MAX_BYTES, Transcriber, TranscriptionFailed
 from app.usage import Visitor
@@ -75,7 +75,8 @@ def _answer_events(answer: Answer) -> list[dict]:
 def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages], llm: Callable[[], LLM],
               suggester: Callable[[], Context], transcriber: Callable[[], Transcriber | None],
               identify: Callable[[Request], Visitor], spend: Callable[[Visitor], None],
-              turnstile_site_key: Callable[[], str | None], starters: Callable[[], list[str]]) -> APIRouter:
+              turnstile_site_key: Callable[[], str | None], starters: Callable[[], list[str]],
+              sign_in: Callable[[], bool]) -> APIRouter:
     """`identify` names the visitor (raising if the bot check is missing); `spend` counts one question against
     their quota (raising when it is used up)."""
     router = APIRouter(prefix="/v1", tags=["v1"])
@@ -98,7 +99,8 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
     def config() -> ConfigV1:
         """What the web app needs at start-up."""
         return ConfigV1(turnstile_site_key=turnstile_site_key(), starters=starters(),
-                        features={"voice": transcriber() is not None, "explain": True, "feedback": True})
+                        features={"voice": transcriber() is not None, "explain": True, "feedback": True,
+                                  "sign_in": sign_in()})
 
     @router.post("/conversations/{conversation_id}/messages", response_model=MessageV1,
                  responses={200: {"content": {"text/event-stream": {}}}})
@@ -113,7 +115,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         question = body.question.strip()
         store_ok = True
         try:
-            state, stored = await asyncio.to_thread(messages().begin, message_id, conversation_id, visitor.session,
+            state, stored = await asyncio.to_thread(messages().begin, message_id, conversation_id, visitor.owner,
                                                     question)
         except KeyReused as e:
             raise Problem(422, "idempotency_key_reused", "This Idempotency-Key was used for another request",
@@ -134,7 +136,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         # Earlier turns let a follow-up ("and last year?") be understood; without them it is asked on its own.
         history = []
         if state == "new" and store_ok:
-            history = await store(messages().history, conversation_id, visitor.session, message_id) or []
+            history = await store(messages().history, conversation_id, visitor.owner, message_id) or []
 
         async def finish(answer: Answer) -> MessageV1:
             follow_ups = await asyncio.to_thread(suggestions, answer)
@@ -179,9 +181,20 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
 
         return EventSourceResponse(events())
 
+    @router.get("/conversations")
+    def conversations(request: Request) -> list[ConversationV1]:
+        """Your recent conversations, most recent first: when signed in, from every device and kept for longer;
+        otherwise this session's."""
+        return messages().conversations(identify(request).owner)
+
+    @router.get("/conversations/{conversation_id}/messages")
+    def conversation(conversation_id: UUID, request: Request) -> list[MessageV1]:
+        """The answered messages of one of your conversations, oldest first, to pick it up again."""
+        return messages().conversation(conversation_id, identify(request).owner)
+
     def owned(message_id: UUID, request: Request) -> tuple[Visitor, MessageV1]:
         visitor = identify(request)
-        message = messages().get(message_id, visitor.session)
+        message = messages().get(message_id, visitor.owner)
         if message is None:
             raise Problem(404, "message_not_found", "No such message",
                           "It may have expired, or it was asked in another session.")
@@ -196,7 +209,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         """Rate an answer. Rating again replaces the earlier rating."""
         visitor = identify(request)
         rating = 1 if body.rating == "up" else -1
-        if not messages().rate(message_id, visitor.session, rating, body.category, body.comment):
+        if not messages().rate(message_id, visitor.owner, rating, body.category, body.comment):
             raise Problem(404, "message_not_found", "No such message",
                           "It may have expired, or it was asked in another session.")
         return Response(status_code=204)

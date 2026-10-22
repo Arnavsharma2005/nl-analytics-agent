@@ -14,6 +14,8 @@ code and in the database, never by asking the model nicely.
 | Personal data in results | Columns listed in `PERSONAL_DATA_COLUMNS` can filter and be counted but are never returned; email addresses and phone numbers are masked in every result before the user or any model sees them | `app/sql_guard.py`, `app/privacy.py` |
 | Scripts burning the free model quota | Cloudflare Turnstile before a visitor session is issued; questions limited per session per hour and per IP per day; model calls limited per provider per day, with a clear "daily limit reached" error; repeat questions answered from a cache | `app/sessions.py`, `app/usage.py`, `app/answer_cache.py` |
 | Prompt injection, in a question or in data the summary reads | The guard runs after the model, so injected SQL is still refused; the summary model has no tools and is told the rows are data | `app/agents/summary.py` |
+| Sign-in: forged callbacks, stolen codes, open redirects | OAuth with PKCE and a state value checked against a signed, ten-minute cookie; no GitHub scopes requested and the token is not kept; the page to return to must be a path on this site; cookies are HttpOnly, SameSite=Lax and Secure, and each is signed for one purpose only | `app/auth.py`, `app/api_auth.py`, `app/sessions.py` |
+| One visitor reading another's questions | Every message belongs to a signed-in user or an anonymous session, and only its owner can read, rate, explain or continue it | `app/messages.py` |
 | Error messages leaking internals | Errors are problem details with stable codes; unexpected exceptions are logged, not returned | `app/problems.py` |
 | Secrets in the repo | gitleaks on every pull request; keys only in environment variables, never in prompts | `.github/workflows/ci.yml` |
 

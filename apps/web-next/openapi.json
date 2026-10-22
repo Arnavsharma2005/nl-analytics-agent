@@ -384,6 +384,38 @@
         "title": "ConfigV1",
         "type": "object"
       },
+      "ConversationV1": {
+        "description": "A conversation in someone's history.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "messages": {
+            "title": "Messages",
+            "type": "integer"
+          },
+          "title": {
+            "description": "Its first question.",
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "messages",
+          "updated_at"
+        ],
+        "title": "ConversationV1",
+        "type": "object"
+      },
       "ExplanationV1": {
         "properties": {
           "steps": {
@@ -489,6 +521,25 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "MeV1": {
+        "properties": {
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserV1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "title": "MeV1",
+        "type": "object"
+      },
       "MessageV1": {
         "description": "One question in a conversation and its answer.",
         "properties": {
@@ -563,6 +614,43 @@
           "text"
         ],
         "title": "TranscriptV1",
+        "type": "object"
+      },
+      "UserV1": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "login": {
+            "title": "Login",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "login",
+          "name",
+          "avatar_url"
+        ],
+        "title": "UserV1",
         "type": "object"
       },
       "ValidationError": {
@@ -841,6 +929,58 @@
         "summary": "Readyz"
       }
     },
+    "/v1/auth/github": {
+      "get": {
+        "description": "Start signing in with GitHub: redirects there, and GitHub sends the visitor back to the callback.",
+        "operationId": "sign_in_v1_auth_github_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "next",
+            "required": false,
+            "schema": {
+              "default": "/",
+              "maxLength": 500,
+              "title": "Next",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign In",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "sign_out_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Sign Out",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/v1/config": {
       "get": {
         "description": "What the web app needs at start-up.",
@@ -863,7 +1003,79 @@
         ]
       }
     },
+    "/v1/conversations": {
+      "get": {
+        "description": "Your recent conversations, most recent first: when signed in, from every device and kept for longer;\notherwise this session's.",
+        "operationId": "conversations_v1_conversations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConversationV1"
+                  },
+                  "title": "Response Conversations V1 Conversations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Conversations",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/v1/conversations/{conversation_id}/messages": {
+      "get": {
+        "description": "The answered messages of one of your conversations, oldest first, to pick it up again.",
+        "operationId": "conversation_v1_conversations__conversation_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MessageV1"
+                  },
+                  "title": "Response Conversation V1 Conversations  Conversation Id  Messages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Conversation",
+        "tags": [
+          "v1"
+        ]
+      },
       "post": {
         "description": "Ask a question. With `Accept: text/event-stream` the answer streams as events: `message` (its id),\n`step` as each step finishes, `table`, `chart`, `token` (summary text: add it, or with `replace` use it\ninstead of everything so far), and `done` with the whole message; or `error` with a problem object.\nOtherwise the response is the finished message as JSON.",
         "operationId": "ask_v1_conversations__conversation_id__messages_post",
@@ -930,6 +1142,28 @@
           }
         },
         "summary": "Ask",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "description": "Who is signed in, if anyone.",
+        "operationId": "me_v1_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Me",
         "tags": [
           "v1"
         ]

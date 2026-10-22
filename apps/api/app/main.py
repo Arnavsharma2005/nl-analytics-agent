@@ -16,7 +16,9 @@ from sse_starlette.sse import EventSourceResponse
 from app import semantic
 from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
+from app.api_auth import auth_router, is_https, signed_in_user
 from app.api_v1 import v1_router
+from app.auth import GitHub, Users
 from app.config import get_settings
 from app.context import Context
 from app.db import Database
@@ -91,12 +93,25 @@ def get_sessions() -> Sessions:
 @lru_cache
 def get_quota() -> Quota:
     s = get_settings()
-    return Quota(get_counters(), s.quota_session_per_hour, s.quota_ip_per_day)
+    return Quota(get_counters(), s.quota_session_per_hour, s.quota_ip_per_day, s.quota_user_per_hour,
+                 s.quota_user_per_day)
 
 
 @lru_cache
 def get_messages() -> Messages:
-    return Messages(get_app_engine(), get_settings().message_retention_days)
+    s = get_settings()
+    return Messages(get_app_engine(), s.message_retention_days, user_retention_days=s.user_message_retention_days)
+
+
+@lru_cache
+def get_users() -> Users:
+    return Users(get_app_engine())
+
+
+@lru_cache
+def get_github() -> GitHub | None:
+    s = get_settings()
+    return GitHub(s.github_client_id, s.github_client_secret) if s.github_client_id and s.github_client_secret else None
 
 
 @lru_cache
@@ -115,7 +130,7 @@ def get_transcriber() -> Transcriber | None:
 
 def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_llm, sessions_factory=get_sessions,
                quota_factory=get_quota, messages_factory=get_messages, suggester_factory=get_suggester,
-               transcriber_factory=get_transcriber) -> FastAPI:
+               transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github) -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="NL Business Analytics Agent")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
@@ -132,13 +147,14 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         return request.client.host if request.client else "unknown"
 
     def identify(request: Request) -> Visitor:
-        """Who is asking; raises when the bot check is on and the request has no session."""
+        """Who is asking; raises when the bot check is on and the request has neither a session nor a sign-in."""
         sessions = sessions_factory()
         session = sessions.read(request.cookies.get(COOKIE))
-        if sessions.required and not session:
+        user = signed_in_user(sessions, request)
+        if sessions.required and not session and not user:
             raise Problem(403, "bot_check_required", "Please complete the bot check first",
                           "Start a session with POST /api/session and a Turnstile token.")
-        return Visitor(session, client_ip(request))
+        return Visitor(session, client_ip(request), user)
 
     def spend(who: Visitor) -> None:
         """Count one question against the visitor's quota; raises when it is used up."""
@@ -164,7 +180,11 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
     app.include_router(v1_router(
         analyst=analyst_factory, messages=messages_factory, llm=llm_factory, suggester=suggester_factory,
         transcriber=transcriber_factory, identify=identify, spend=spend, turnstile_site_key=turnstile_site_key,
-        starters=starters,
+        starters=starters, sign_in=lambda: github_factory() is not None,
+    ))
+    app.include_router(auth_router(
+        sessions=sessions_factory, github=github_factory, users=users_factory, messages=messages_factory,
+        public_url=settings.public_url, user_session_days=settings.user_session_days,
     ))
 
     @app.get("/api/config")
@@ -181,8 +201,8 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         if value is None:
             raise Problem(403, "bot_check_failed", "The bot check did not pass", "Please reload the page and try again.")
         response = JSONResponse({"expires_in": sessions.ttl_s})
-        https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
-        response.set_cookie(COOKIE, value, max_age=sessions.ttl_s, httponly=True, samesite="lax", secure=https)
+        response.set_cookie(COOKIE, value, max_age=sessions.ttl_s, httponly=True, samesite="lax",
+                            secure=is_https(request))
         return response
 
     @app.get("/healthz")

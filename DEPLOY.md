@@ -138,6 +138,22 @@ needed.
 
 If the Turnstile bot check is on, add the Pages domain to the widget's hostnames in the Turnstile dashboard.
 
+### Sign in with GitHub (optional)
+
+Signed-in visitors get higher question limits (60 an hour, 500 a day, no per-IP limit) and keep their
+conversations for 90 days on any device. Nobody has to sign in.
+
+1. On GitHub, go to **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**.
+   - Homepage URL: the Pages URL, e.g. `https://<project>.pages.dev`
+   - Authorization callback URL: `https://<project>.pages.dev/v1/auth/github/callback`
+2. Create a client secret.
+3. On the API, set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (as a secret) and `PUBLIC_URL` (the Pages URL), and
+   make sure `SESSION_SECRET` is set, since it also signs the sign-in cookie.
+4. Redeploy. A "Sign in with GitHub" link appears at the top of the page.
+
+The app asks GitHub for no scopes: it reads only the public profile (login, name, avatar) and drops the GitHub
+token straight away.
+
 ## 4. Change the frontend after deploying
 
 The frontend is in `apps/web/src` (React + Vite). Work on it locally:

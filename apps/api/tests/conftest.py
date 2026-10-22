@@ -108,5 +108,5 @@ def app_tables(app_engine):
     from sqlalchemy import text
 
     with app_engine.begin() as conn:
-        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback"))
+        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback, app.users"))
     return app_engine

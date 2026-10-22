@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getConfig } from "./api/session";
+import Account, { SignInNotice } from "./components/Account";
 import AnswerView from "./components/AnswerView";
 import Composer from "./components/Composer";
 import Inspector from "./components/Inspector";
@@ -71,7 +72,7 @@ function InspectorPanel({ turn, onClose, docked }: { turn: Turn; onClose: () => 
 }
 
 export default function App() {
-  const { turns, ask, retry, reset, busy } = useConversation();
+  const { turns, conversationId, ask, retry, reset, open, busy } = useConversation();
   const config = useQuery({ queryKey: ["config"], queryFn: getConfig, staleTime: Infinity });
   const [inspected, setInspected] = useState<string | null>(null);
   const wide = useMedia("(min-width: 1100px)");
@@ -89,23 +90,35 @@ export default function App() {
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 self-center"><rect x="1" y="9" width="3" height="6" rx="1" fill="var(--ink)" /><rect x="6.5" y="5" width="3" height="10" rx="1" fill="var(--ink)" /><rect x="12" y="1" width="3" height="14" rx="1" fill="var(--turmeric)" /></svg>
           Sales analyst
         </h1>
-        {turns.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              setInspected(null);
-              reset();
-            }}
-            className="rounded-md border border-rule px-3 py-1.5 text-sm hover:border-ink"
-          >
-            New conversation
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {config.data?.features.sign_in && (
+            <Account
+              current={conversationId}
+              onOpen={(id, messages) => {
+                setInspected(null);
+                open(id, messages);
+              }}
+            />
+          )}
+          {turns.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setInspected(null);
+                reset();
+              }}
+              className="rounded-md border border-rule px-3 py-1.5 text-sm hover:border-ink"
+            >
+              New conversation
+            </button>
+          )}
+        </div>
       </header>
 
       <div className={wide && inspectedTurn ? "grid grid-cols-[minmax(0,1fr)_400px] gap-10" : ""}>
         <main className="mx-auto flex min-h-[calc(100dvh-4.5rem)] max-w-[760px] flex-col">
           <ServerStatus />
+          <SignInNotice />
           <div className="flex-1">
             {turns.length === 0 ? (
               <Starters questions={config.data?.starters ?? []} onAsk={ask} />

@@ -43,15 +43,54 @@ class Turnstile:
         return bool(result.get("success"))
 
 
+class Signer:
+    """Signed, expiring cookie values: `value.expires.signature`. The value must not contain dots.
+
+    `purpose` keeps values signed for one cookie from being accepted as another's."""
+
+    def __init__(self, key: bytes, purpose: str = "", clock: Callable[[], float] = time.time):
+        self._key = key
+        self._purpose = purpose
+        self._clock = clock
+
+    def seal(self, value: str, ttl_s: int) -> str:
+        if "." in value:
+            raise ValueError("a signed value must not contain dots")
+        expires = int(self._clock()) + ttl_s
+        return f"{value}.{expires}.{self._sign(value, expires)}"
+
+    def open(self, token: str | None) -> str | None:
+        """The value, if the signature is valid and it has not expired."""
+        try:
+            value, expires, signature = (token or "").split(".")
+            fresh = int(expires) > self._clock()
+        except ValueError:
+            return None
+        if fresh and value and hmac.compare_digest(signature, self._sign(value, int(expires))):
+            return value
+        return None
+
+    def _sign(self, value: str, expires: int) -> str:
+        # Without a purpose the message is the one session cookies have always been signed with.
+        message = f"{self._purpose}|{value}.{expires}" if self._purpose else f"{value}.{expires}"
+        mac = hmac.new(self._key, message.encode(), hashlib.sha256).digest()
+        return base64.urlsafe_b64encode(mac).decode().rstrip("=")
+
+
 class Sessions:
     def __init__(self, secret: str | None, ttl_s: int, turnstile: Turnstile | None = None,
                  clock: Callable[[], float] = time.time):
         if not secret:
             log.warning("SESSION_SECRET is not set; using a random one, so sessions end when the app restarts")
         self._key = (secret or secrets.token_urlsafe(32)).encode()
+        self._clock = clock
+        self._signer = Signer(self._key, clock=clock)
         self.ttl_s = ttl_s
         self.turnstile = turnstile
-        self._clock = clock
+
+    def signer(self, purpose: str) -> Signer:
+        """A signer for another cookie, with the same secret as sessions."""
+        return Signer(self._key, purpose, self._clock)
 
     @property
     def required(self) -> bool:
@@ -62,21 +101,8 @@ class Sessions:
         """A new signed session value, or None if the bot check failed."""
         if self.turnstile and not self.turnstile.verify(token or "", ip):
             return None
-        sid = secrets.token_urlsafe(12)
-        expires = int(self._clock()) + self.ttl_s
-        return f"{sid}.{expires}.{self._sign(sid, expires)}"
+        return self._signer.seal(secrets.token_urlsafe(12), self.ttl_s)
 
     def read(self, value: str | None) -> str | None:
         """The session id in a cookie value, if the signature is valid and it has not expired."""
-        try:
-            sid, expires, signature = (value or "").split(".")
-            fresh = int(expires) > self._clock()
-        except ValueError:
-            return None
-        if fresh and hmac.compare_digest(signature, self._sign(sid, int(expires))):
-            return sid
-        return None
-
-    def _sign(self, sid: str, expires: int) -> str:
-        mac = hmac.new(self._key, f"{sid}.{expires}".encode(), hashlib.sha256).digest()
-        return base64.urlsafe_b64encode(mac).decode().rstrip("=")
+        return self._signer.open(value)
