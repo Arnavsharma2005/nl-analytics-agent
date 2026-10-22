@@ -107,21 +107,42 @@ Errors are [problem details](docs/errors.md) with a stable `code` to branch on.
 | `GET` | `/healthz` | Liveness for uptime pings and the host's health check; never touches the database |
 | `GET` | `/readyz` | Readiness: the database answers (`/api/health` is the same check) |
 
+## Business rules and verified queries
+
+What the words in a question mean here lives in `apps/api/semantic/`, not in code, so it can be reviewed like
+any other change:
+
+- `metrics.yml`: the business rules the SQL agent follows (revenue counts completed orders only, how to read
+  "last quarter", and so on). Each rule lists the terms it is about.
+- `queries.yml`: verified queries, questions whose SQL someone has checked against the data. Those marked
+  `starter` are the example questions on the front page. CI runs every one through the SQL guard and the
+  database, and checks that none gives away a held-out eval question.
+
+Changing a rule changes the SQL agent's prompt, so record the eval cassette again (below).
+
 ## Evaluation
 
-`eval/questions.yaml` holds 30 labelled questions in four groups (simple aggregates, joins, time-based,
-advanced: window functions, growth, shares, cohorts), each with a gold SQL query.
+`eval/questions.yaml` holds 120 labelled questions in four groups (simple aggregates, joins, time-based,
+advanced: window functions, growth, shares, cohorts), each with a gold SQL query and a difficulty (easy, medium,
+hard). They are split in two:
+
+- **dev** (50): free to look at while tuning prompts, and the source of the first verified queries.
+- **test** (70): held out. This is the number to report. Nothing in the prompts or the verified-query library may
+  be written from these questions, and CI fails if a verified query returns the answer to one of them.
+
+The first 30 questions are the original v1 set; they are all in dev.
 
 ```bash
-python eval/run_eval.py              # runs all 30 through the full agent (uses the fallback chain)
+python eval/run_eval.py              # runs all 120 through the full agent (uses the fallback chain)
+python eval/run_eval.py --split test # only the held-out questions
 python eval/run_eval.py --delay 4    # slower, to stay under free-tier rate limits
 python eval/run_eval.py --gold-only  # check every gold query runs (no LLM needed; part of CI)
 ```
 
 A prediction counts as correct when its result matches the gold result: same rows, values within rounding,
 column names and order ignored, extra columns allowed, and row order checked only for rankings and time
-series. The script prints accuracy by group, how many answers were rescued by the retry loop, and median
-latency, and saves the run to `eval/results/<date>-<commit>.json`. Compare any two runs question by question:
+series. The script prints accuracy by split, difficulty and group, how many answers were rescued by the retry
+loop, and median latency, and saves the run to `eval/results/<date>-<commit>.json`. Compare any two runs question by question:
 
 ```bash
 python eval/compare.py eval/results/<before>.json eval/results/<after>.json
@@ -191,6 +212,7 @@ safe is described in [SECURITY.md](SECURITY.md).
 apps/api/
   app/analyst.py  Analyst.ask / Analyst.stream: the one entry point for answering a question, and the Answer model
   app/agents/     router, sql_agent, chart, summary
+  app/semantic.py, semantic/   business rules (metrics.yml) and verified queries (queries.yml)
   app/graph.py    LangGraph wiring and the retry loop
   app/sql_guard.py, app/db.py   validation, introspection, read-only execution
   app/llm.py, app/providers.py  fallback chain across the 5 providers

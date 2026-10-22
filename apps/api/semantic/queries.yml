@@ -1,0 +1,473 @@
+# Verified queries: questions with SQL that a person has checked by hand against the data.
+#
+# The analyst will use these as worked examples for similar questions, and can answer a question that matches one
+# outright. Starter questions are the examples the app offers on its front page.
+#
+# Rules, checked in CI (tests/test_semantic.py):
+# - every query passes the SQL guard and runs;
+# - none gives away a held-out eval question: no query may return the same result as a test-split question's gold
+#   query, or ask a near-identical question. Add new queries from real usage or the eval dev split only.
+#
+# `verified_by: seed` marks the queries taken from the eval dev split when this library was started; eval dev
+# questions #1 and #9 are left out because their answers are the same as test questions #78 and #102.
+
+queries:
+
+  - question: How many orders were cancelled in 2024?  # eval #2
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT COUNT(*) AS cancelled_orders FROM orders
+      WHERE status = 'cancelled' AND order_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+  - question: How many customers do we have in each segment?  # eval #3
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT segment, COUNT(*) AS customers FROM customers GROUP BY segment
+
+  - question: How many products are there in each category?  # eval #4
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT c.name AS category, COUNT(*) AS products
+      FROM products p JOIN categories c ON c.category_id = p.category_id GROUP BY c.name
+
+  - question: What was the average order value in 2025?  # eval #5
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+  - question: How many orders came through each channel in 2025?  # eval #6
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT channel, COUNT(*) AS orders FROM orders
+      WHERE status = 'completed' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY channel
+
+  - question: Which 5 products have the highest list price?  # eval #7
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT name, list_price FROM products ORDER BY list_price DESC LIMIT 5
+
+  - question: How many customers are in the Middle East region?  # eval #8
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT COUNT(*) AS customers FROM customers c JOIN regions r ON r.region_id = c.region_id
+      WHERE r.name = 'Middle East'
+
+  - question: Top 10 products by revenue in 2025  # eval #10
+    verified_by: seed
+    verified_at: 2026-10-22
+    starter: true
+    sql: |
+      SELECT p.name AS product, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY p.product_id, p.name ORDER BY revenue DESC LIMIT 10
+
+  - question: Revenue by product category in 2024  # eval #11
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT c.name AS category, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      JOIN categories c ON c.category_id = p.category_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+      GROUP BY c.name
+
+  - question: Which category had the highest profit margin in 2025?  # eval #12
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT c.name AS category,
+             ROUND(SUM(oi.quantity * (oi.unit_price - p.unit_cost)) / SUM(oi.quantity * oi.unit_price) * 100, 2) AS margin_pct
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      JOIN categories c ON c.category_id = p.category_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY c.name ORDER BY margin_pct DESC LIMIT 1
+
+  - question: Who are our top 5 customers by lifetime revenue?  # eval #13
+    verified_by: seed
+    verified_at: 2026-10-22
+    starter: true
+    sql: |
+      SELECT cu.name AS customer, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN customers cu ON cu.customer_id = o.customer_id
+      WHERE o.status = 'completed'
+      GROUP BY cu.customer_id, cu.name ORDER BY revenue DESC LIMIT 5
+
+  - question: What is the average order value for each customer segment?  # eval #14
+    verified_by: seed
+    verified_at: 2026-10-22
+    starter: true
+    sql: |
+      SELECT cu.segment, ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN customers cu ON cu.customer_id = o.customer_id
+      WHERE o.status = 'completed'
+      GROUP BY cu.segment
+
+  - question: Revenue by country in 2025  # eval #15
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT r.country, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN customers c ON c.customer_id = o.customer_id
+      JOIN regions r ON r.region_id = c.region_id
+      JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY r.country
+
+  - question: How many units did we sell in each category in 2025?  # eval #16
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT c.name AS category, SUM(oi.quantity) AS units
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      JOIN categories c ON c.category_id = p.category_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY c.name
+
+  - question: What was our monthly revenue in 2025?  # eval #17
+    verified_by: seed
+    verified_at: 2026-10-22
+    starter: true
+    sql: |
+      SELECT date_trunc('month', o.order_date)::date AS month, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY 1 ORDER BY 1
+
+  - question: Show quarterly revenue across 2024 and 2025  # eval #18
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT date_trunc('quarter', o.order_date)::date AS quarter, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed'
+      GROUP BY 1 ORDER BY 1
+
+  - question: How many new customers signed up each month in 2025?  # eval #19
+    verified_by: seed
+    verified_at: 2026-10-22
+    starter: true
+    sql: |
+      SELECT date_trunc('month', signup_date)::date AS month, COUNT(*) AS new_customers
+      FROM customers WHERE signup_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY 1 ORDER BY 1
+
+  - question: Which month of 2024 had the most completed orders?  # eval #20
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT date_trunc('month', order_date)::date AS month, COUNT(*) AS orders
+      FROM orders WHERE status = 'completed' AND order_date BETWEEN '2024-01-01' AND '2024-12-31'
+      GROUP BY 1 ORDER BY orders DESC LIMIT 1
+
+  - question: What was revenue last quarter?  # eval #21
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-10-01' AND '2025-12-31'
+
+  - question: How many orders were placed each week in December 2025?  # eval #22
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT date_trunc('week', order_date)::date AS week, COUNT(*) AS orders
+      FROM orders WHERE status = 'completed' AND order_date BETWEEN '2025-12-01' AND '2025-12-31'
+      GROUP BY 1 ORDER BY 1
+
+  - question: Compare 2025 revenue on weekends versus weekdays  # eval #23
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT CASE WHEN EXTRACT(ISODOW FROM o.order_date) >= 6 THEN 'weekend' ELSE 'weekday' END AS day_type,
+             ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY 1
+
+  - question: Which region grew revenue the fastest from 2024 to 2025, in percent?  # eval #24
+    verified_by: seed
+    verified_at: 2026-10-22
+    starter: true
+    sql: |
+      WITH yearly AS (
+        SELECT r.name AS region,
+               SUM(oi.quantity * oi.unit_price) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 2024) AS rev_2024,
+               SUM(oi.quantity * oi.unit_price) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 2025) AS rev_2025
+        FROM orders o JOIN customers c ON c.customer_id = o.customer_id
+        JOIN regions r ON r.region_id = c.region_id
+        JOIN order_items oi ON oi.order_id = o.order_id
+        WHERE o.status = 'completed'
+        GROUP BY r.name
+      )
+      SELECT region, ROUND((rev_2025 - rev_2024) / rev_2024 * 100, 2) AS growth_pct
+      FROM yearly ORDER BY growth_pct DESC LIMIT 1
+
+  - question: What is the return rate for each product category?  # eval #25
+    verified_by: seed
+    verified_at: 2026-10-22
+    starter: true
+    sql: |
+      WITH order_cat AS (
+        SELECT DISTINCT o.order_id, o.status, c.name AS category
+        FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+        JOIN products p ON p.product_id = oi.product_id
+        JOIN categories c ON c.category_id = p.category_id
+        WHERE o.status IN ('completed', 'returned')
+      )
+      SELECT category, ROUND(COUNT(*) FILTER (WHERE status = 'returned') * 100.0 / COUNT(*), 2) AS return_rate_pct
+      FROM order_cat GROUP BY category
+
+  - question: Show cumulative revenue by month for 2025  # eval #26
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT month, ROUND(SUM(revenue) OVER (ORDER BY month), 2) AS cumulative_revenue
+      FROM (
+        SELECT date_trunc('month', o.order_date)::date AS month, SUM(oi.quantity * oi.unit_price) AS revenue
+        FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+        WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+        GROUP BY 1
+      ) m ORDER BY month
+
+  - question: What share of 2025 revenue came from each channel?  # eval #27
+    verified_by: seed
+    verified_at: 2026-10-22
+    starter: true
+    sql: |
+      SELECT o.channel,
+             ROUND(SUM(oi.quantity * oi.unit_price) * 100 / SUM(SUM(oi.quantity * oi.unit_price)) OVER (), 2) AS revenue_share_pct
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY o.channel
+
+  - question: How many customers have never placed an order?  # eval #28
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT COUNT(*) AS customers FROM customers c
+      WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id)
+
+  - question: List the top 3 products by revenue in each category for 2025  # eval #29
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT category, product, revenue FROM (
+        SELECT c.name AS category, p.name AS product, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue,
+               ROW_NUMBER() OVER (PARTITION BY c.name ORDER BY SUM(oi.quantity * oi.unit_price) DESC) AS rn
+        FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+        JOIN products p ON p.product_id = oi.product_id
+        JOIN categories c ON c.category_id = p.category_id
+        WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+        GROUP BY c.name, p.product_id, p.name
+      ) ranked WHERE rn <= 3
+
+  - question: What percentage of customers who ordered in 2025 placed more than one order that year?  # eval #30
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      WITH per_customer AS (
+        SELECT customer_id, COUNT(*) AS orders FROM orders
+        WHERE status = 'completed' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+        GROUP BY customer_id
+      )
+      SELECT ROUND(COUNT(*) FILTER (WHERE orders > 1) * 100.0 / COUNT(*), 2) AS repeat_customer_pct FROM per_customer
+
+  - question: How many completed orders were there in 2025?  # eval #31
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT COUNT(*) AS orders FROM orders
+      WHERE status = 'completed' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+  - question: How many customers are in each region?  # eval #32
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT r.name AS region, COUNT(*) AS customers
+      FROM customers c JOIN regions r ON r.region_id = c.region_id
+      GROUP BY r.name
+
+  - question: What is the average list price of products in each category?  # eval #33
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT c.name AS category, ROUND(AVG(p.list_price), 2) AS avg_list_price
+      FROM products p JOIN categories c ON c.category_id = p.category_id
+      GROUP BY c.name
+
+  - question: How many orders were returned in 2025?  # eval #34
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT COUNT(*) AS returned_orders FROM orders
+      WHERE status = 'returned' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+  - question: Revenue by customer segment in 2025  # eval #35
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT cu.segment, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN customers cu ON cu.customer_id = o.customer_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY cu.segment
+
+  - question: Top 5 categories by units sold in 2024  # eval #36
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT c.name AS category, SUM(oi.quantity) AS units
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      JOIN categories c ON c.category_id = p.category_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+      GROUP BY c.name ORDER BY units DESC LIMIT 5
+
+  - question: How many orders did we get each month in 2024?  # eval #37
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT date_trunc('month', order_date)::date AS month, COUNT(*) AS orders
+      FROM orders WHERE status = 'completed' AND order_date BETWEEN '2024-01-01' AND '2024-12-31'
+      GROUP BY 1 ORDER BY 1
+
+  - question: Revenue by quarter in 2025  # eval #38
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT date_trunc('quarter', o.order_date)::date AS quarter, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY 1 ORDER BY 1
+
+  - question: What was the month-over-month revenue growth in percent for each month of 2025?  # eval #39
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      WITH monthly AS (
+        SELECT date_trunc('month', o.order_date)::date AS month, SUM(oi.quantity * oi.unit_price) AS revenue
+        FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+        WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-12-01' AND '2025-12-31'
+        GROUP BY 1
+      )
+      SELECT month, ROUND((revenue - LAG(revenue) OVER (ORDER BY month)) / LAG(revenue) OVER (ORDER BY month) * 100, 2) AS growth_pct
+      FROM monthly ORDER BY month OFFSET 1
+
+  - question: Profit by region in 2025  # eval #40
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT r.name AS region, ROUND(SUM(oi.quantity * (oi.unit_price - p.unit_cost)), 2) AS profit
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      JOIN customers cu ON cu.customer_id = o.customer_id
+      JOIN regions r ON r.region_id = cu.region_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY r.name
+
+  - question: How many products were launched in 2024?  # eval #41
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT COUNT(*) AS products FROM products WHERE launched_on BETWEEN '2024-01-01' AND '2024-12-31'
+
+  - question: Average order value by channel in 2025  # eval #42
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT o.channel, ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY o.channel
+
+  - question: What share of 2025 revenue did each category contribute, in percent?  # eval #43
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT c.name AS category,
+             ROUND(SUM(oi.quantity * oi.unit_price) * 100 / SUM(SUM(oi.quantity * oi.unit_price)) OVER (), 2) AS revenue_share_pct
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      JOIN categories c ON c.category_id = p.category_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY c.name
+
+  - question: Top 5 products by units sold in 2025  # eval #44
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT p.name AS product, SUM(oi.quantity) AS units
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY p.product_id, p.name ORDER BY units DESC LIMIT 5
+
+  - question: What is the cancellation rate for each channel?  # eval #45
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT channel, ROUND(COUNT(*) FILTER (WHERE status = 'cancelled') * 100.0 / COUNT(*), 2) AS cancellation_rate_pct
+      FROM orders GROUP BY channel
+
+  - question: How many new customers signed up in 2024?  # eval #46
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT COUNT(*) AS new_customers FROM customers WHERE signup_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+  - question: Revenue from enterprise customers in each year  # eval #47
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT EXTRACT(YEAR FROM o.order_date)::int AS year, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN customers cu ON cu.customer_id = o.customer_id
+      WHERE o.status = 'completed' AND cu.segment = 'enterprise'
+      GROUP BY 1 ORDER BY 1
+
+  - question: Which 3 customers placed the most orders in 2025?  # eval #48
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT cu.name AS customer, COUNT(*) AS orders
+      FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY cu.customer_id, cu.name ORDER BY orders DESC, cu.customer_id LIMIT 3
+
+  - question: Revenue by region and channel in 2025  # eval #49
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT r.name AS region, o.channel, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN customers cu ON cu.customer_id = o.customer_id
+      JOIN regions r ON r.region_id = cu.region_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY r.name, o.channel
+
+  - question: Which quarter of 2024 had the lowest revenue?  # eval #50
+    verified_by: seed
+    verified_at: 2026-10-22
+    sql: |
+      SELECT date_trunc('quarter', o.order_date)::date AS quarter, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+      GROUP BY 1 ORDER BY revenue ASC LIMIT 1

@@ -1,0 +1,44 @@
+# Business rules: what the words in a question mean in this database.
+#
+# The SQL agent's prompt lists every rule, in this order. `terms` are the words and phrases a rule is about; a rule
+# without terms applies to every question. Terms do not change the prompt yet: they are for choosing the rules that
+# matter to a question once the prompt is assembled per question.
+#
+# A line break inside a rule is kept in the prompt. Changing any rule changes what the model is asked, so the eval
+# cassette has to be recorded again (see Evaluation in the README).
+
+rules:
+  - id: revenue
+    terms: [revenue, sales, sold, income, turnover, earned, earn, made, make, spent, spend, rupees]
+    text: |-
+      Revenue = SUM(order_items.quantity * order_items.unit_price) over orders with status = 'completed',
+      unless the question is explicitly about cancelled or returned orders.
+
+  - id: cost_profit_margin
+    terms: [cost, costs, cogs, cost of goods, profit, profitable, margin, margins]
+    text: |-
+      Cost = SUM(order_items.quantity * products.unit_cost). Profit = revenue - cost, completed orders only.
+      Margin % = profit / revenue * 100.
+
+  - id: orders
+    text: |-
+      "Orders" and "number of orders" mean completed orders unless the question mentions cancelled, returned or all orders.
+
+  - id: average_order_value
+    terms: [average order value, aov, order value, basket size, average basket]
+    text: |-
+      Average order value (AOV) = revenue / number of completed orders.
+
+  - id: return_and_cancellation_rates
+    terms: [return rate, returns, returned, cancellation rate, cancellations, cancelled, canceled]
+    text: |-
+      Return rate = returned orders / (completed + returned orders) * 100. Cancellation rate = cancelled / all orders * 100.
+
+  - id: dimensions
+    text: |-
+      Customer region comes from customers.region_id; product category from products.category_id.
+
+  - id: dates
+    text: |-
+      The data covers 2024-01-01 to 2025-12-31. Interpret relative dates from 2026-01-01: "last year" and
+      "this year" both mean 2025, "last quarter" means Q4 2025, "last month" means December 2025.

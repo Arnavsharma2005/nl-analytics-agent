@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sse_starlette.sse import EventSourceResponse
 
+from app import semantic
 from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
 from app.config import get_settings
@@ -24,16 +25,6 @@ from app.usage import Counters, DailyBudget, Quota, Visitor
 
 log = logging.getLogger(__name__)
 
-EXAMPLES = [
-    "What was our monthly revenue in 2025?",
-    "Which region grew revenue fastest from 2024 to 2025?",
-    "Top 10 products by profit in 2025",
-    "What share of 2025 revenue came from each channel?",
-    "Which product category has the highest return rate?",
-    "How many new customers signed up each quarter?",
-    "Average order value by customer segment",
-    "Who are our top 5 customers by lifetime revenue?",
-]
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=500)
@@ -159,7 +150,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
 
     @app.get("/api/examples")
     def examples():
-        return EXAMPLES
+        return [q.question for q in semantic.load().queries if q.starter]
 
     @app.get("/api/schema")
     def schema():
