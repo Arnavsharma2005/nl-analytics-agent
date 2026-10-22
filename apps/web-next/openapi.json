@@ -4,6 +4,19 @@
       "Answer": {
         "description": "Everything the analyst returns for one question. New fields are only ever added, each with a default.",
         "properties": {
+          "analysis": {
+            "anyOf": [
+              {
+                "const": "drivers",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "drivers: a question about why a metric changed, answered by splitting the change by each dimension in code (the rows are the drivers, biggest first).",
+            "title": "Analysis"
+          },
           "answer": {
             "anyOf": [
               {
@@ -225,7 +238,8 @@
           "verified_question",
           "assumptions",
           "summary_verified",
-          "standalone_question"
+          "standalone_question",
+          "analysis"
         ],
         "title": "Answer",
         "type": "object"

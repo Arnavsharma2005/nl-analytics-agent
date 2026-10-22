@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.chart import ChartSpec
 from app.agents.followup import Turn
+from app.analysis.drivers import Drivers
 from app.brief import Brief, database
 from app.context import Context
 from app.db import DataSource
@@ -30,6 +31,7 @@ STEP_LABELS = {
     "execute": "Running the query",
     "chart_agent": "Choosing a chart",
     "summary_agent": "Writing the insight",
+    "drivers": "Finding what drove the change",
     "schema_answer": "Describing the data",
     "out_of_scope": "Done",
     "give_up": "Stopped",
@@ -79,6 +81,9 @@ class Answer(BaseModel):
         default=None, description="Whether every figure in the summary was found in the result (None: not checked).")
     standalone_question: str | None = Field(
         default=None, description="A follow-up question as it was understood with the earlier ones in its conversation.")
+    analysis: Literal["drivers"] | None = Field(
+        default=None, description="drivers: a question about why a metric changed, answered by splitting the change "
+                                  "by each dimension in code (the rows are the drivers, biggest first).")
 
     def as_turn(self) -> Turn:
         """This answer as an earlier turn of its conversation, for reading the questions after it."""
@@ -109,6 +114,7 @@ class Answer(BaseModel):
             verified_question=state.get("verified_question") if data_query else None,
             assumptions=state.get("assumptions") or [],
             summary_verified=state.get("summary_verified"),
+            analysis=state.get("analysis"),
         )
 
 
@@ -172,15 +178,16 @@ class Analyst:
     With a `cache`, a question asked before is answered from it (marked `cached`), and complete new answers are
     added to it. With a `context` (app.context), the SQL agent sees verified examples and the values a question
     names, and a verified query can answer a question outright. `check_results` and `check_summaries` turn on
-    the checks in app.checks. Each of these is off unless given.
+    the checks in app.checks. With `drivers` (app.analysis.drivers), questions about why a metric changed are
+    answered by driver analysis. Each of these is off unless given.
     """
 
     def __init__(self, llm: LLM, source: DataSource, *, brief: Brief | None = None, max_attempts: int = 3,
                  rows_for_llm: int = 50, cache: Cache | None = None, context: Context | None = None,
-                 check_results: bool = False, check_summaries: bool = False):
+                 check_results: bool = False, check_summaries: bool = False, drivers: Drivers | None = None):
         self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm,
                                   brief=brief or database(), context=context, check_results=check_results,
-                                  check_summaries=check_summaries)
+                                  check_summaries=check_summaries, drivers=drivers)
         self._cache = cache
 
     def ask(self, question: str, history: list[Turn] | None = None) -> Answer:
@@ -228,9 +235,9 @@ class Analyst:
             if mode == "updates":
                 for node, update in chunk.items():
                     yield Step(node, STEP_LABELS.get(node, node))
-                    if node == "execute" and update and "rows" in update:
+                    if node in ("execute", "drivers") and update and "rows" in update:
                         yield Table(update["columns"], update["rows"], update["truncated"])
-                    elif node == "chart_agent" and update:
+                    if node in ("chart_agent", "drivers") and update and "chart" in update:
                         yield Chart(ChartSpec.model_validate(update["chart"]))
             elif mode == "custom":
                 if "token" in chunk:

@@ -38,6 +38,7 @@ export function message(id: string, conversation: string, question = "Revenue by
       verified_question: null,
       assumptions: ["revenue means completed orders only"],
       summary_verified: true,
+      analysis: null,
       standalone_question: null,
     },
   };

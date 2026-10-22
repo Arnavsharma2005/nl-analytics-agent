@@ -15,6 +15,7 @@ from sqlalchemy.engine import Engine
 from sse_starlette.sse import EventSourceResponse
 
 from app import semantic
+from app.analysis import drivers as driver_analysis
 from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
 from app.api_auth import auth_router, is_https, signed_in_user
@@ -83,15 +84,17 @@ def get_analyst() -> Analyst:
     db = get_db()
     context = (Context(semantic.load(), db.schema(), build_embedder(s), fast_path=s.verified_fast_path)
                if s.context_retrieval else None)
+    drivers = driver_analysis.load() if s.driver_analysis else None
     switches = {"context": bool(context), "fast_path": bool(context) and s.verified_fast_path,
-                "check_results": s.check_results, "check_summaries": s.check_summaries}
+                "check_results": s.check_results, "check_summaries": s.check_summaries, "drivers": bool(drivers)}
     cache = None
     if s.answer_cache_ttl_s:
         # Answers depend on the build and on which features are on, so either changing starts a fresh cache.
         version = (s.git_commit or "dev") + "".join(f":{k}" for k, on in switches.items() if on)
         cache = AnswerCache(get_app_engine(), version, s.answer_cache_ttl_s)
     return Analyst(get_llm(), db, max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm, cache=cache,
-                   context=context, check_results=s.check_results, check_summaries=s.check_summaries)
+                   context=context, check_results=s.check_results, check_summaries=s.check_summaries,
+                   drivers=drivers)
 
 
 @lru_cache

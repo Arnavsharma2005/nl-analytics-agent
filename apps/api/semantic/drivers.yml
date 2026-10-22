@@ -1,0 +1,50 @@
+# Driver analysis: the metrics "why did it change?" questions can be about, and the dimensions a change is split by
+# (app/analysis/drivers.py). Each metric is computed over the rows of `tables` that meet `where`, placed in a period
+# by `date`. A ratio is one additive metric over another, and its change splits into mix and rate effects.
+#
+# These should agree with the business rules in metrics.yml: revenue counts completed orders only.
+
+tables: >-
+  orders o
+  JOIN order_items oi ON oi.order_id = o.order_id
+  JOIN customers c ON c.customer_id = o.customer_id
+  JOIN regions r ON r.region_id = c.region_id
+  JOIN products p ON p.product_id = oi.product_id
+  JOIN categories cat ON cat.category_id = p.category_id
+where: o.status = 'completed'
+date: o.order_date
+
+metrics:
+  - id: revenue
+    label: Revenue
+    sum: oi.quantity * oi.unit_price
+  - id: profit
+    label: Profit
+    sum: oi.quantity * (oi.unit_price - p.unit_cost)
+  - id: units
+    label: Units sold
+    sum: oi.quantity
+  - id: orders
+    label: Orders
+    count_distinct: o.order_id
+  - id: customers
+    label: Customers who ordered
+    count_distinct: o.customer_id
+  - id: aov
+    label: Average order value
+    ratio: [revenue, orders]
+    description: revenue per completed order
+
+dimensions:
+  - id: region
+    label: Region
+    sql: r.name
+  - id: category
+    label: Category
+    sql: cat.name
+  - id: channel
+    label: Channel
+    sql: o.channel
+  - id: segment
+    label: Customer segment
+    sql: c.segment
