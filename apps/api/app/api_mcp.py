@@ -2,7 +2,7 @@
 
 It is the same analyst behind the same SQL guard as the web app, and every question counts against the same
 limits. MCP clients can't pass the Turnstile bot check, so they are limited by IP address alone (a visitor with no
-session); signed-in limits don't apply. Only the demo's sales data is reachable: uploads belong to a browser session.
+session); signed-in limits don't apply. Only the connected database is reachable: uploads belong to a browser session.
 Off unless MCP=true.
 
 Tools: `ask` (a question in plain English), `list_tables` (what the data holds), `list_verified_questions` and
@@ -75,9 +75,8 @@ def mcp_server(*, analyst: Callable[[], Analyst], db: Callable[[], DataSource], 
     """`spend(visitor)` counts one question, raising Problem when the limit is reached."""
     server = MCPServer(
         "nl-analytics-agent", title="Sales analyst",
-        instructions="Answers questions about a store's sales data (orders, customers, products, regions, "
-                     "channels) in plain English, with the SQL it ran. Call list_tables to see what is there. "
-                     "Each question counts against a daily limit.",
+        instructions=f"Answers questions in plain English about {library().about.data}, with the SQL it ran. "
+                     "Call list_tables to see what is there. Each question counts against a daily limit.",
     )
 
     def charge(ctx: Context) -> None:
@@ -90,7 +89,7 @@ def mcp_server(*, analyst: Callable[[], Analyst], db: Callable[[], DataSource], 
 
     @server.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
     async def ask(question: Annotated[str, Field(min_length=3, max_length=500)], ctx: Context) -> AnswerOut:
-        """Ask a question about the sales data in plain English, such as "Revenue by region in 2025". Returns
+        """Ask a question about the data in plain English, such as "Revenue by region in 2025". Returns
         the answer, the SQL behind it and the result table. Each call counts against the daily limit."""
         charge(ctx)
         try:
@@ -105,7 +104,7 @@ def mcp_server(*, analyst: Callable[[], Analyst], db: Callable[[], DataSource], 
 
     @server.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
     def list_tables() -> list[TableOut]:
-        """The tables of the sales data and their columns, with what each one means."""
+        """The tables of the data and their columns, with what each one means."""
         return [TableOut(name=t.name, description=t.comment,
                          columns=[ColumnOut(name=c.name, type=c.type, description=c.comment, personal=c.personal)
                                   for c in t.columns])

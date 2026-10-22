@@ -72,12 +72,12 @@ def test_rules_render_as_a_bulleted_list():
 
 def test_every_shipped_rule_is_in_the_prompt():
     from app.agents.sql_agent import write_sql
-    from app.brief import demo
+    from app.brief import database
 
     from .conftest import FakeLLM
 
     llm = FakeLLM()
-    write_sql(llm, "Revenue by region", "", [], demo())
+    write_sql(llm, "Revenue by region", "", [], database())
     (_, prompt), = llm.systems
     assert all(rule.text.splitlines()[0] in prompt for rule in LIBRARY.rules)
 

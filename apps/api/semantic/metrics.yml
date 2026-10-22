@@ -7,6 +7,16 @@
 # A line break inside a rule is kept in the prompt. Changing any rule changes what the model is asked, so the eval
 # cassette has to be recorded again (see Evaluation in the README).
 
+# What the data is: `data` for the router, the date column time series group by, how to write money, and the reply to
+# a question about something else. Each can be left out; see About in app/semantic.py for the defaults.
+about:
+  data: an e-commerce database
+  time_column: order_date
+  money: Money is in Indian rupees; write amounts like ₹1.2 Cr, ₹45.3 L or ₹8,450.
+  out_of_scope: >-
+    I can only answer questions about the sales data: orders, revenue, products, categories, customers and regions
+    for 2024-2025. Try something like "Monthly revenue in 2025" or "Top 5 products by profit".
+
 rules:
   - id: revenue
     terms: [revenue, sales, sold, income, turnover, earned, earn, made, make, spent, spend, rupees]

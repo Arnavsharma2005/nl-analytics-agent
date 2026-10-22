@@ -195,7 +195,11 @@ def ensure_database(database_url: str) -> bool:
 if __name__ == "__main__":
     import sys
 
-    url = get_settings().database_url
+    settings = get_settings()
+    if not settings.sample_data:
+        print("SAMPLE_DATA is off; not loading the sample data.")
+        raise SystemExit(0)
+    url = settings.database_url
     if ensure_database(url):
         print("Created the database.")
     if "--if-empty" in sys.argv and is_seeded(url):

@@ -5,3 +5,6 @@ apps/web/dist
 .env
 .git
 eval/results.json
+apps/web-next/dist
+apps/web-next/test-results
+apps/web-next/tools/node_modules
