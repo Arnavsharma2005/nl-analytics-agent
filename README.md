@@ -106,6 +106,14 @@ npm run dev                        # UI on http://localhost:5173
 
 Or run everything in containers: `docker compose up --build`, then open http://localhost:8000.
 
+### Run it yourself, on your own data
+
+`self-host/` is a compose file that runs the published image with Postgres: `docker compose up -d` and it serves
+the new web app, the API and the MCP server on one port. Point `DATABASE_URL` at a read-only role on your own
+Postgres, describe your data and its rules in your own `metrics.yml` and `queries.yml`, and set
+`REQUIRE_READ_ONLY_DATA=true` to have the app refuse to start on a connection that could write. The steps are in
+[docs/self-host.md](docs/self-host.md). `WEB_APP=next` serves `apps/web-next` at `/` instead of `apps/web`.
+
 ### The new web app
 
 `apps/web-next` is the v2 frontend, built on the `/v1` API. It will replace `apps/web` once it is deployed. It uses

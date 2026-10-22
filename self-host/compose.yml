@@ -1,0 +1,56 @@
+# Self-hosted Sales analyst: the API and web app in one container, and Postgres for the app's own tables (and the
+# sample data, unless you point DATABASE_URL at your own database). See docs/self-host.md.
+#
+#   cp .env.example .env    # add at least one model key
+#   docker compose up -d    # then open http://localhost:8000
+name: sales-analyst
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: analyst
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analyst}
+      POSTGRES_DB: analytics
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analyst -d analytics"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    image: ${IMAGE:-ghcr.io/arnavsharma2005/nl-analytics-agent}:${VERSION:-latest}
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # The app's own tables (history, limits, uploads) always live in the bundled Postgres.
+      APP_DATABASE_URL: postgresql://analyst:${POSTGRES_PASSWORD:-analyst}@postgres:5432/analytics
+      # The data questions are about: the sample data in the bundled Postgres, or your own read-only connection.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://analyst:${POSTGRES_PASSWORD:-analyst}@postgres:5432/analytics}
+      WEB_APP: next
+      MCP: ${MCP:-true}
+    ports:
+      - "${PORT:-8000}:8000"
+    # A database on this machine is reachable as host.docker.internal (on Linux too).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # To use your own metrics.yml and queries.yml, mount their folder and set SEMANTIC_DIR=/semantic in .env:
+    # volumes:
+    #   - ./semantic:/semantic:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+volumes:
+  postgres:

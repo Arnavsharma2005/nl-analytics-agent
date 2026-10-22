@@ -1,7 +1,7 @@
 """What the analyst knows about this business beyond the schema, kept as files a data owner can edit and review.
 
-`semantic/metrics.yml` holds the business rules (what revenue, orders or "last quarter" mean here), and
-`semantic/queries.yml` holds verified queries: questions with SQL someone has checked by hand. CI runs every
+`semantic/metrics.yml` holds what the data is (`about`) and the business rules (what revenue, orders or "last
+quarter" mean here), and `semantic/queries.yml` holds verified queries: questions with SQL someone has checked by hand. CI runs every
 verified query and checks that none of them gives away a held-out eval question.
 """
 
@@ -17,6 +17,16 @@ SEMANTIC_DIR = Path(__file__).resolve().parents[1] / "semantic"
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class About(_Strict):
+    """What the data is, as the agents are told it. The defaults suit any database; the demo's describe its store."""
+
+    data: str = "a business database"  # for the router: "an e-commerce database"
+    time_column: str = "the date column"  # named in the SQL agent's example for time series
+    money: str | None = None  # how the summary writes money; unset when the data says nothing about currency
+    out_of_scope: str = ("I can only answer questions about the data in this database. Ask what it contains, or "
+                         "try one of the suggested questions.")
 
 
 class Rule(_Strict):
@@ -48,6 +58,7 @@ class VerifiedQuery(_Strict):
 
 
 class Semantic(_Strict):
+    about: About = About()
     rules: tuple[Rule, ...]
     queries: tuple[VerifiedQuery, ...] = Field(default=())
 
@@ -72,8 +83,21 @@ class Semantic(_Strict):
         return "\n".join("- " + r.text.replace("\n", "\n  ") for r in self.rules)
 
 
+def _sections(file: Path) -> dict:
+    """A YAML file's top-level sections; none when the file is missing (a self-hosted folder may have only one)."""
+    if not file.exists():
+        return {}
+    return yaml.safe_load(file.read_text(encoding="utf-8")) or {}
+
+
 @cache
-def load(directory: Path = SEMANTIC_DIR) -> Semantic:
-    rules = yaml.safe_load((directory / "metrics.yml").read_text(encoding="utf-8"))["rules"]
-    queries = yaml.safe_load((directory / "queries.yml").read_text(encoding="utf-8"))["queries"]
-    return Semantic(rules=rules, queries=queries)
+def load(directory: Path | None = None) -> Semantic:
+    """The rules and verified queries in `directory`: by default SEMANTIC_DIR if set (your own, when self-hosting
+    on your own data), else the demo's."""
+    if directory is None:
+        from app.config import get_settings  # here, not at the top: config is light, but tests load this alone
+
+        directory = get_settings().semantic_dir or SEMANTIC_DIR
+    metrics = _sections(directory / "metrics.yml")
+    return Semantic(about=metrics.get("about") or {}, rules=metrics.get("rules") or [],
+                    queries=_sections(directory / "queries.yml").get("queries") or [])

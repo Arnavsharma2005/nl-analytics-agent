@@ -176,6 +176,31 @@ class Database:
                         c.values = list(values)
         return Schema(tables)
 
+    def write_access(self) -> list[str]:
+        """What lets this connection change data, in words; empty when it can only read."""
+        system = "n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg!_%' ESCAPE '!'"
+        with self.engine.connect() as conn:
+            reasons = []
+            role, superuser = conn.execute(text(
+                "SELECT rolname, rolsuper FROM pg_roles WHERE rolname = current_user")).one()
+            if superuser:
+                reasons.append(f"{role} is a superuser")
+            tables = conn.execute(text(f"""
+                SELECT format('%I.%I', n.nspname, c.relname) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind IN ('r', 'p') AND {system}
+                  AND has_table_privilege(c.oid, 'INSERT, UPDATE, DELETE, TRUNCATE')
+                ORDER BY 1 LIMIT 4
+            """)).scalars().all()
+            if tables:
+                reasons.append("it can change " + ", ".join(tables[:3]) + (" and more" if len(tables) > 3 else ""))
+            schemas = conn.execute(text(f"""
+                SELECT n.nspname FROM pg_namespace n WHERE {system} AND has_schema_privilege(n.oid, 'CREATE')
+                ORDER BY 1
+            """)).scalars().all()
+            if schemas:
+                reasons.append("it can create tables in " + ", ".join(schemas))
+        return reasons
+
     def _read_only(self, conn) -> None:
         conn.execute(text("SET TRANSACTION READ ONLY"))
         conn.execute(text(f"SET LOCAL statement_timeout = {int(self.statement_timeout_ms)}"))
