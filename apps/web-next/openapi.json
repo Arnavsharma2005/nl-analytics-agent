@@ -829,6 +829,55 @@
         "title": "SessionRequest",
         "type": "object"
       },
+      "ShareV1": {
+        "description": "A shared answer, as it was when it was shared.",
+        "properties": {
+          "about": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The uploaded file it was about; none for the demo's sales data.",
+            "title": "About"
+          },
+          "answer": {
+            "$ref": "#/components/schemas/Answer"
+          },
+          "asked_at": {
+            "format": "date-time",
+            "title": "Asked At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "description": "The token in the share link: /s/{id}.",
+            "title": "Id",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "question",
+          "about",
+          "answer",
+          "asked_at",
+          "expires_at"
+        ],
+        "title": "ShareV1",
+        "type": "object"
+      },
       "TranscriptV1": {
         "properties": {
           "text": {
@@ -1672,6 +1721,50 @@
         ]
       }
     },
+    "/v1/messages/{message_id}/share": {
+      "post": {
+        "description": "Share one of your answers: a read-only snapshot anyone with the link (/s/{id}) can open, without\nsigning in. Sharing the same answer again gives the same link.",
+        "operationId": "share_v1_messages__message_id__share_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Share",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
     "/v1/session": {
       "post": {
         "description": "Issue a visitor session cookie, after the Turnstile bot check when it is on.",
@@ -1707,6 +1800,85 @@
           }
         },
         "summary": "Start Session",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/shares/{share_id}": {
+      "delete": {
+        "description": "Stop sharing: the link stops working for everyone.",
+        "operationId": "delete_share_v1_shares__share_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "share_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{16}$",
+              "title": "Share Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Share",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "description": "A shared answer. Anyone with the link can read it; nothing is run again.",
+        "operationId": "get_share_v1_shares__share_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "share_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{16}$",
+              "title": "Share Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Share",
         "tags": [
           "v1"
         ]

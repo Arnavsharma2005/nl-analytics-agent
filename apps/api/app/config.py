@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     # Uploaded datasets kept open in memory for questions, and the memory each one's queries may use.
     uploads_open: int = 3
     upload_query_memory_mb: int = 128
+    share_keep_days: int = 90  # how long a share link works
 
     # --- Sign-in with GitHub (optional). Off unless both are set. Create an OAuth app at
     # https://github.com/settings/developers with the callback URL <PUBLIC_URL>/v1/auth/github/callback. ----------

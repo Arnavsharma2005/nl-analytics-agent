@@ -11,8 +11,6 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict
 
 from app.auth import Attempt, GitHub, SignInFailed, Users
-from app.datasets.store import Datasets
-from app.messages import Messages
 from app.problems import Problem
 from app.sessions import COOKIE, Sessions
 
@@ -49,8 +47,9 @@ def signed_in_user(sessions: Sessions, request: Request) -> int | None:
 
 
 def auth_router(*, sessions: Callable[[], Sessions], github: Callable[[], GitHub | None], users: Callable[[], Users],
-                messages: Callable[[], Messages], datasets: Callable[[], Datasets], public_url: str | None,
-                user_session_days: int) -> APIRouter:
+                adopt: Callable[[str, str], None], public_url: str | None, user_session_days: int) -> APIRouter:
+    """`adopt(session, owner)` gives what an anonymous session owned (messages, uploads, shares) to the user who
+    just signed in from it."""
     router = APIRouter(prefix="/v1", tags=["v1"])
 
     def site(request: Request) -> str:
@@ -93,8 +92,7 @@ def auth_router(*, sessions: Callable[[], Sessions], github: Callable[[], GitHub
             return back_to(request, "/?signin=failed")
         if session := sessions().read(request.cookies.get(COOKIE)):
             try:  # the conversation and files they had before signing in become theirs
-                await asyncio.to_thread(messages().adopt, session, f"user:{user.id}")
-                await asyncio.to_thread(datasets().adopt, session, f"user:{user.id}")
+                await asyncio.to_thread(adopt, session, f"user:{user.id}")
             except Exception:  # noqa: BLE001 - signing in matters more than keeping those few messages
                 log.exception("could not move the session's messages to the user")
         response = back_to(request, attempt.next)

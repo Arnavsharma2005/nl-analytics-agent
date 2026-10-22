@@ -4,6 +4,7 @@ import { getConfig } from "./api/session";
 import type { Dataset } from "./api/types";
 import Account, { SignInNotice } from "./components/Account";
 import AnswerView from "./components/AnswerView";
+import Brand from "./components/Brand";
 import Composer from "./components/Composer";
 import { DatasetBar, UploadButton, YourUploads } from "./components/Datasets";
 import Inspector from "./components/Inspector";
@@ -101,10 +102,7 @@ export default function App() {
   return (
     <div className="mx-auto min-h-dvh max-w-[1240px] px-4 sm:px-6">
       <header className="flex items-center justify-between gap-4 py-4">
-        <h1 className="flex items-baseline gap-2 text-base font-semibold text-ink">
-          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 self-center"><rect x="1" y="9" width="3" height="6" rx="1" fill="var(--ink)" /><rect x="6.5" y="5" width="3" height="10" rx="1" fill="var(--ink)" /><rect x="12" y="1" width="3" height="14" rx="1" fill="var(--turmeric)" /></svg>
-          Sales analyst
-        </h1>
+        <Brand />
         <div className="flex items-center gap-2">
           {config.data?.features.sign_in && (
             <Account

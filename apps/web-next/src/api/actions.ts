@@ -1,6 +1,6 @@
-import { ApiError, postJSON, problemFrom } from "./http";
+import { ApiError, deleteJSON, getJSON, postJSON, problemFrom } from "./http";
 import { ensureSession } from "./session";
-import type { Explanation, Feedback } from "./types";
+import type { Explanation, Feedback, Share } from "./types";
 
 export const sendFeedback = (messageId: string, feedback: Feedback) =>
   postJSON(`/v1/messages/${messageId}/feedback`, feedback);
@@ -16,3 +16,12 @@ export async function transcribe(audio: Blob): Promise<string> {
   if (!r.ok) throw await problemFrom(r);
   return (await r.json()).text;
 }
+
+/** Share an answer: a read-only snapshot at /s/{id} that anyone with the link can open. */
+export const shareMessage = async (messageId: string) => (await postJSON<Share>(`/v1/messages/${messageId}/share`))!;
+
+export const getShare = (id: string) => getJSON<Share>(`/v1/shares/${id}`);
+
+export const stopSharing = (id: string) => deleteJSON(`/v1/shares/${id}`);
+
+export const shareUrl = (id: string) => `${location.origin}/s/${id}`;

@@ -419,6 +419,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/messages/{message_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share
+         * @description Share one of your answers: a read-only snapshot anyone with the link (/s/{id}) can open, without
+         *     signing in. Sharing the same answer again gives the same link.
+         */
+        post: operations["share_v1_messages__message_id__share_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/session": {
         parameters: {
             query?: never;
@@ -434,6 +455,30 @@ export interface paths {
          */
         post: operations["start_session_v1_session_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/shares/{share_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Share
+         * @description A shared answer. Anyone with the link can read it; nothing is run again.
+         */
+        get: operations["get_share_v1_shares__share_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Share
+         * @description Stop sharing: the link stops working for everyone.
+         */
+        delete: operations["delete_share_v1_shares__share_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -802,6 +847,35 @@ export interface components {
         SessionRequest: {
             /** Turnstile Token */
             turnstile_token?: string | null;
+        };
+        /**
+         * ShareV1
+         * @description A shared answer, as it was when it was shared.
+         */
+        ShareV1: {
+            /**
+             * About
+             * @description The uploaded file it was about; none for the demo's sales data.
+             */
+            about: string | null;
+            answer: components["schemas"]["Answer"];
+            /**
+             * Asked At
+             * Format: date-time
+             */
+            asked_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * @description The token in the share link: /s/{id}.
+             */
+            id: string;
+            /** Question */
+            question: string;
         };
         /** TranscriptV1 */
         TranscriptV1: {
@@ -1462,6 +1536,37 @@ export interface operations {
             };
         };
     };
+    share_v1_messages__message_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_session_v1_session_post: {
         parameters: {
             query?: never;
@@ -1483,6 +1588,66 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_share_v1_shares__share_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_share_v1_shares__share_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
