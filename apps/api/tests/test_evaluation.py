@@ -28,6 +28,8 @@ def test_gold_questions_run(db):
     import yaml
 
     questions = yaml.safe_load((Path(__file__).resolve().parents[3] / "eval" / "questions.yaml").read_text())
-    assert len(questions) == 30
+    assert [q["id"] for q in questions] == list(range(1, len(questions) + 1))
+    assert {q["split"] for q in questions} == {"dev", "test"} and {q["difficulty"] for q in questions} == {"easy", "medium", "hard"}
+    assert len({q["question"].lower() for q in questions}) == len(questions)
     for q in questions:
         assert db.run(q["gold_sql"]).rows, f"gold query {q['id']} returned no rows"

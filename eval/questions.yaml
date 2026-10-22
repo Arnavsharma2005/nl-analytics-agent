@@ -1,9 +1,15 @@
-# 30 labelled questions for measuring SQL correctness (execution accuracy).
+# 120 labelled questions for measuring SQL correctness (execution accuracy).
 # `ordered: true` means row order matters for the answer (rankings, time series).
+# `split`: dev (50) may be used to tune prompts and to seed the verified-query library; test (70) is held out.
+#   Report the test score, and never add a verified query that looks like a test question (CI checks this).
+#   The first 30 are dev because the v1 prompts were written against them.
+# `difficulty`: easy, medium or hard.
 # Gold SQL follows the business rules in the SQL agent's prompt (revenue = completed orders only, etc.).
 
 - id: 1
   category: simple
+  difficulty: easy
+  split: dev
   question: What was total revenue in 2025?
   gold_sql: |
     SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
@@ -12,6 +18,8 @@
 
 - id: 2
   category: simple
+  difficulty: easy
+  split: dev
   question: How many orders were cancelled in 2024?
   gold_sql: |
     SELECT COUNT(*) AS cancelled_orders FROM orders
@@ -19,12 +27,16 @@
 
 - id: 3
   category: simple
+  difficulty: easy
+  split: dev
   question: How many customers do we have in each segment?
   gold_sql: |
     SELECT segment, COUNT(*) AS customers FROM customers GROUP BY segment
 
 - id: 4
   category: simple
+  difficulty: easy
+  split: dev
   question: How many products are there in each category?
   gold_sql: |
     SELECT c.name AS category, COUNT(*) AS products
@@ -32,6 +44,8 @@
 
 - id: 5
   category: simple
+  difficulty: easy
+  split: dev
   question: What was the average order value in 2025?
   gold_sql: |
     SELECT ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
@@ -40,6 +54,8 @@
 
 - id: 6
   category: simple
+  difficulty: easy
+  split: dev
   question: How many orders came through each channel in 2025?
   gold_sql: |
     SELECT channel, COUNT(*) AS orders FROM orders
@@ -48,6 +64,8 @@
 
 - id: 7
   category: simple
+  difficulty: easy
+  split: dev
   question: Which 5 products have the highest list price?
   ordered: true
   gold_sql: |
@@ -55,6 +73,8 @@
 
 - id: 8
   category: simple
+  difficulty: easy
+  split: dev
   question: How many customers are in the Middle East region?
   gold_sql: |
     SELECT COUNT(*) AS customers FROM customers c JOIN regions r ON r.region_id = c.region_id
@@ -62,6 +82,8 @@
 
 - id: 9
   category: joins
+  difficulty: medium
+  split: dev
   question: Show revenue by region for 2025
   gold_sql: |
     SELECT r.name AS region, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
@@ -74,6 +96,8 @@
 
 - id: 10
   category: joins
+  difficulty: medium
+  split: dev
   question: Top 10 products by revenue in 2025
   ordered: true
   gold_sql: |
@@ -85,6 +109,8 @@
 
 - id: 11
   category: joins
+  difficulty: medium
+  split: dev
   question: Revenue by product category in 2024
   gold_sql: |
     SELECT c.name AS category, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
@@ -96,6 +122,8 @@
 
 - id: 12
   category: joins
+  difficulty: hard
+  split: dev
   question: Which category had the highest profit margin in 2025?
   gold_sql: |
     SELECT c.name AS category,
@@ -108,6 +136,8 @@
 
 - id: 13
   category: joins
+  difficulty: medium
+  split: dev
   question: Who are our top 5 customers by lifetime revenue?
   ordered: true
   gold_sql: |
@@ -119,6 +149,8 @@
 
 - id: 14
   category: joins
+  difficulty: medium
+  split: dev
   question: What is the average order value for each customer segment?
   gold_sql: |
     SELECT cu.segment, ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
@@ -129,6 +161,8 @@
 
 - id: 15
   category: joins
+  difficulty: medium
+  split: dev
   question: Revenue by country in 2025
   gold_sql: |
     SELECT r.country, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
@@ -140,6 +174,8 @@
 
 - id: 16
   category: joins
+  difficulty: medium
+  split: dev
   question: How many units did we sell in each category in 2025?
   gold_sql: |
     SELECT c.name AS category, SUM(oi.quantity) AS units
@@ -151,6 +187,8 @@
 
 - id: 17
   category: time
+  difficulty: medium
+  split: dev
   question: What was our monthly revenue in 2025?
   ordered: true
   gold_sql: |
@@ -161,6 +199,8 @@
 
 - id: 18
   category: time
+  difficulty: medium
+  split: dev
   question: Show quarterly revenue across 2024 and 2025
   ordered: true
   gold_sql: |
@@ -171,6 +211,8 @@
 
 - id: 19
   category: time
+  difficulty: medium
+  split: dev
   question: How many new customers signed up each month in 2025?
   ordered: true
   gold_sql: |
@@ -180,6 +222,8 @@
 
 - id: 20
   category: time
+  difficulty: medium
+  split: dev
   question: Which month of 2024 had the most completed orders?
   gold_sql: |
     SELECT date_trunc('month', order_date)::date AS month, COUNT(*) AS orders
@@ -188,6 +232,8 @@
 
 - id: 21
   category: time
+  difficulty: medium
+  split: dev
   question: What was revenue last quarter?
   gold_sql: |
     SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
@@ -196,6 +242,8 @@
 
 - id: 22
   category: time
+  difficulty: medium
+  split: dev
   question: How many orders were placed each week in December 2025?
   ordered: true
   gold_sql: |
@@ -205,6 +253,8 @@
 
 - id: 23
   category: time
+  difficulty: medium
+  split: dev
   question: Compare 2025 revenue on weekends versus weekdays
   gold_sql: |
     SELECT CASE WHEN EXTRACT(ISODOW FROM o.order_date) >= 6 THEN 'weekend' ELSE 'weekday' END AS day_type,
@@ -215,6 +265,8 @@
 
 - id: 24
   category: advanced
+  difficulty: hard
+  split: dev
   question: Which region grew revenue the fastest from 2024 to 2025, in percent?
   gold_sql: |
     WITH yearly AS (
@@ -232,6 +284,8 @@
 
 - id: 25
   category: advanced
+  difficulty: hard
+  split: dev
   question: What is the return rate for each product category?
   gold_sql: |
     WITH order_cat AS (
@@ -246,6 +300,8 @@
 
 - id: 26
   category: advanced
+  difficulty: hard
+  split: dev
   question: Show cumulative revenue by month for 2025
   ordered: true
   gold_sql: |
@@ -259,6 +315,8 @@
 
 - id: 27
   category: advanced
+  difficulty: hard
+  split: dev
   question: What share of 2025 revenue came from each channel?
   gold_sql: |
     SELECT o.channel,
@@ -269,6 +327,8 @@
 
 - id: 28
   category: advanced
+  difficulty: hard
+  split: dev
   question: How many customers have never placed an order?
   gold_sql: |
     SELECT COUNT(*) AS customers FROM customers c
@@ -276,6 +336,8 @@
 
 - id: 29
   category: advanced
+  difficulty: hard
+  split: dev
   question: List the top 3 products by revenue in each category for 2025
   gold_sql: |
     SELECT category, product, revenue FROM (
@@ -290,6 +352,8 @@
 
 - id: 30
   category: advanced
+  difficulty: hard
+  split: dev
   question: What percentage of customers who ordered in 2025 placed more than one order that year?
   gold_sql: |
     WITH per_customer AS (
@@ -298,3 +362,1059 @@
       GROUP BY customer_id
     )
     SELECT ROUND(COUNT(*) FILTER (WHERE orders > 1) * 100.0 / COUNT(*), 2) AS repeat_customer_pct FROM per_customer
+
+- id: 31
+  category: simple
+  difficulty: easy
+  split: dev
+  question: How many completed orders were there in 2025?
+  gold_sql: |
+    SELECT COUNT(*) AS orders FROM orders
+    WHERE status = 'completed' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 32
+  category: joins
+  difficulty: easy
+  split: dev
+  question: How many customers are in each region?
+  gold_sql: |
+    SELECT r.name AS region, COUNT(*) AS customers
+    FROM customers c JOIN regions r ON r.region_id = c.region_id
+    GROUP BY r.name
+
+- id: 33
+  category: joins
+  difficulty: easy
+  split: dev
+  question: What is the average list price of products in each category?
+  gold_sql: |
+    SELECT c.name AS category, ROUND(AVG(p.list_price), 2) AS avg_list_price
+    FROM products p JOIN categories c ON c.category_id = p.category_id
+    GROUP BY c.name
+
+- id: 34
+  category: simple
+  difficulty: easy
+  split: dev
+  question: How many orders were returned in 2025?
+  gold_sql: |
+    SELECT COUNT(*) AS returned_orders FROM orders
+    WHERE status = 'returned' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 35
+  category: joins
+  difficulty: medium
+  split: dev
+  question: Revenue by customer segment in 2025
+  gold_sql: |
+    SELECT cu.segment, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY cu.segment
+
+- id: 36
+  category: joins
+  difficulty: medium
+  split: dev
+  question: Top 5 categories by units sold in 2024
+  ordered: true
+  gold_sql: |
+    SELECT c.name AS category, SUM(oi.quantity) AS units
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY c.name ORDER BY units DESC LIMIT 5
+
+- id: 37
+  category: time
+  difficulty: medium
+  split: dev
+  question: How many orders did we get each month in 2024?
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('month', order_date)::date AS month, COUNT(*) AS orders
+    FROM orders WHERE status = 'completed' AND order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 38
+  category: time
+  difficulty: medium
+  split: dev
+  question: Revenue by quarter in 2025
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('quarter', o.order_date)::date AS quarter, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 39
+  category: advanced
+  difficulty: hard
+  split: dev
+  question: What was the month-over-month revenue growth in percent for each month of 2025?
+  ordered: true
+  gold_sql: |
+    WITH monthly AS (
+      SELECT date_trunc('month', o.order_date)::date AS month, SUM(oi.quantity * oi.unit_price) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-12-01' AND '2025-12-31'
+      GROUP BY 1
+    )
+    SELECT month, ROUND((revenue - LAG(revenue) OVER (ORDER BY month)) / LAG(revenue) OVER (ORDER BY month) * 100, 2) AS growth_pct
+    FROM monthly ORDER BY month OFFSET 1
+
+- id: 40
+  category: joins
+  difficulty: medium
+  split: dev
+  question: Profit by region in 2025
+  gold_sql: |
+    SELECT r.name AS region, ROUND(SUM(oi.quantity * (oi.unit_price - p.unit_cost)), 2) AS profit
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name
+
+- id: 41
+  category: simple
+  difficulty: easy
+  split: dev
+  question: How many products were launched in 2024?
+  gold_sql: |
+    SELECT COUNT(*) AS products FROM products WHERE launched_on BETWEEN '2024-01-01' AND '2024-12-31'
+
+- id: 42
+  category: joins
+  difficulty: medium
+  split: dev
+  question: Average order value by channel in 2025
+  gold_sql: |
+    SELECT o.channel, ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY o.channel
+
+- id: 43
+  category: advanced
+  difficulty: hard
+  split: dev
+  question: What share of 2025 revenue did each category contribute, in percent?
+  gold_sql: |
+    SELECT c.name AS category,
+           ROUND(SUM(oi.quantity * oi.unit_price) * 100 / SUM(SUM(oi.quantity * oi.unit_price)) OVER (), 2) AS revenue_share_pct
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY c.name
+
+- id: 44
+  category: joins
+  difficulty: medium
+  split: dev
+  question: Top 5 products by units sold in 2025
+  ordered: true
+  gold_sql: |
+    SELECT p.name AS product, SUM(oi.quantity) AS units
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY p.product_id, p.name ORDER BY units DESC LIMIT 5
+
+- id: 45
+  category: advanced
+  difficulty: medium
+  split: dev
+  question: What is the cancellation rate for each channel?
+  gold_sql: |
+    SELECT channel, ROUND(COUNT(*) FILTER (WHERE status = 'cancelled') * 100.0 / COUNT(*), 2) AS cancellation_rate_pct
+    FROM orders GROUP BY channel
+
+- id: 46
+  category: time
+  difficulty: easy
+  split: dev
+  question: How many new customers signed up in 2024?
+  gold_sql: |
+    SELECT COUNT(*) AS new_customers FROM customers WHERE signup_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+- id: 47
+  category: joins
+  difficulty: medium
+  split: dev
+  question: Revenue from enterprise customers in each year
+  ordered: true
+  gold_sql: |
+    SELECT EXTRACT(YEAR FROM o.order_date)::int AS year, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    WHERE o.status = 'completed' AND cu.segment = 'enterprise'
+    GROUP BY 1 ORDER BY 1
+
+- id: 48
+  category: advanced
+  difficulty: medium
+  split: dev
+  question: Which 3 customers placed the most orders in 2025?
+  ordered: true
+  gold_sql: |
+    SELECT cu.name AS customer, COUNT(*) AS orders
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY cu.customer_id, cu.name ORDER BY orders DESC, cu.customer_id LIMIT 3
+
+- id: 49
+  category: joins
+  difficulty: medium
+  split: dev
+  question: Revenue by region and channel in 2025
+  gold_sql: |
+    SELECT r.name AS region, o.channel, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name, o.channel
+
+- id: 50
+  category: time
+  difficulty: medium
+  split: dev
+  question: Which quarter of 2024 had the lowest revenue?
+  gold_sql: |
+    SELECT date_trunc('quarter', o.order_date)::date AS quarter, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY 1 ORDER BY revenue ASC LIMIT 1
+
+# --- held-out test split: never used to tune prompts or the verified library ------------------------------
+
+- id: 51
+  category: simple
+  difficulty: easy
+  split: test
+  question: What was total revenue in 2024?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+- id: 52
+  category: simple
+  difficulty: easy
+  split: test
+  question: How many orders came in through the mobile channel in 2024?
+  gold_sql: |
+    SELECT COUNT(*) AS orders FROM orders
+    WHERE status = 'completed' AND channel = 'mobile' AND order_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+- id: 53
+  category: joins
+  difficulty: easy
+  split: test
+  question: How many customers are in the South region?
+  gold_sql: |
+    SELECT COUNT(*) AS customers FROM customers c JOIN regions r ON r.region_id = c.region_id
+    WHERE r.name = 'South'
+
+- id: 54
+  category: simple
+  difficulty: easy
+  split: test
+  question: Which product has the highest list price?
+  gold_sql: |
+    SELECT name AS product, list_price FROM products ORDER BY list_price DESC LIMIT 1
+
+- id: 55
+  category: simple
+  difficulty: easy
+  split: test
+  question: How many product categories are there?
+  gold_sql: |
+    SELECT COUNT(*) AS categories FROM categories
+
+- id: 56
+  category: simple
+  difficulty: easy
+  split: test
+  question: How many enterprise customers do we have?
+  gold_sql: |
+    SELECT COUNT(*) AS customers FROM customers WHERE segment = 'enterprise'
+
+- id: 57
+  category: simple
+  difficulty: medium
+  split: test
+  question: What was the average order value in 2024?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+- id: 58
+  category: simple
+  difficulty: easy
+  split: test
+  question: How many orders were cancelled in 2025?
+  gold_sql: |
+    SELECT COUNT(*) AS cancelled_orders FROM orders
+    WHERE status = 'cancelled' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 59
+  category: joins
+  difficulty: medium
+  split: test
+  question: Show revenue by region for 2024
+  gold_sql: |
+    SELECT r.name AS region, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN customers c ON c.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = c.region_id
+    JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY r.name
+
+- id: 60
+  category: joins
+  difficulty: medium
+  split: test
+  question: What was revenue for each product category in 2025?
+  gold_sql: |
+    SELECT c.name AS category, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY c.name
+
+- id: 61
+  category: joins
+  difficulty: medium
+  split: test
+  question: Which region had the most orders in 2025?
+  gold_sql: |
+    SELECT r.name AS region, COUNT(*) AS orders
+    FROM orders o JOIN customers c ON c.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = c.region_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name ORDER BY orders DESC LIMIT 1
+
+- id: 62
+  category: joins
+  difficulty: medium
+  split: test
+  question: Who were the top 10 customers by revenue in 2025?
+  ordered: true
+  gold_sql: |
+    SELECT cu.name AS customer, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY cu.customer_id, cu.name ORDER BY revenue DESC LIMIT 10
+
+- id: 63
+  category: joins
+  difficulty: medium
+  split: test
+  question: Profit by product category in 2025
+  gold_sql: |
+    SELECT c.name AS category, ROUND(SUM(oi.quantity * (oi.unit_price - p.unit_cost)), 2) AS profit
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY c.name
+
+- id: 64
+  category: joins
+  difficulty: medium
+  split: test
+  question: How many units were sold in each region in 2025?
+  gold_sql: |
+    SELECT r.name AS region, SUM(oi.quantity) AS units
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name
+
+- id: 65
+  category: joins
+  difficulty: medium
+  split: test
+  question: Marketplace revenue by category in 2025
+  gold_sql: |
+    SELECT c.name AS category, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND o.channel = 'marketplace' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY c.name
+
+- id: 66
+  category: joins
+  difficulty: medium
+  split: test
+  question: Which Electronics product earned the most revenue in 2025?
+  gold_sql: |
+    SELECT p.name AS product, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND c.name = 'Electronics' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY p.product_id, p.name ORDER BY revenue DESC LIMIT 1
+
+- id: 67
+  category: joins
+  difficulty: medium
+  split: test
+  question: What was the average order value in each region in 2025?
+  gold_sql: |
+    SELECT r.name AS region, ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name
+
+- id: 68
+  category: joins
+  difficulty: medium
+  split: test
+  question: Revenue by customer segment for 2024 and 2025
+  gold_sql: |
+    SELECT cu.segment, EXTRACT(YEAR FROM o.order_date)::int AS year, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    WHERE o.status = 'completed'
+    GROUP BY cu.segment, 2
+
+- id: 69
+  category: joins
+  difficulty: medium
+  split: test
+  question: How many different customers ordered from each region in 2025?
+  gold_sql: |
+    SELECT r.name AS region, COUNT(DISTINCT o.customer_id) AS customers
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name
+
+- id: 70
+  category: joins
+  difficulty: hard
+  split: test
+  question: Which category had the lowest profit margin in 2024?
+  gold_sql: |
+    SELECT c.name AS category,
+           ROUND(SUM(oi.quantity * (oi.unit_price - p.unit_cost)) / SUM(oi.quantity * oi.unit_price) * 100, 2) AS margin_pct
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY c.name ORDER BY margin_pct ASC LIMIT 1
+
+- id: 71
+  category: joins
+  difficulty: medium
+  split: test
+  question: How much 2025 revenue came from India compared with customers outside India?
+  gold_sql: |
+    SELECT CASE WHEN r.country = 'India' THEN 'India' ELSE 'Outside India' END AS market,
+           ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1
+
+- id: 72
+  category: joins
+  difficulty: medium
+  split: test
+  question: Top 5 products by profit in 2025
+  ordered: true
+  gold_sql: |
+    SELECT p.name AS product, ROUND(SUM(oi.quantity * (oi.unit_price - p.unit_cost)), 2) AS profit
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY p.product_id, p.name ORDER BY profit DESC LIMIT 5
+
+- id: 73
+  category: joins
+  difficulty: easy
+  split: test
+  question: How many products are in the Books category?
+  gold_sql: |
+    SELECT COUNT(*) AS products FROM products p JOIN categories c ON c.category_id = p.category_id
+    WHERE c.name = 'Books'
+
+- id: 74
+  category: joins
+  difficulty: medium
+  split: test
+  question: Revenue by sales channel in 2024
+  gold_sql: |
+    SELECT o.channel, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY o.channel
+
+- id: 75
+  category: time
+  difficulty: medium
+  split: test
+  question: Show monthly revenue for 2024
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('month', o.order_date)::date AS month, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 76
+  category: time
+  difficulty: medium
+  split: test
+  question: How many orders were there in each quarter of 2025?
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('quarter', order_date)::date AS quarter, COUNT(*) AS orders
+    FROM orders WHERE status = 'completed' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 77
+  category: time
+  difficulty: medium
+  split: test
+  question: What was revenue last month?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-12-01' AND '2025-12-31'
+
+- id: 78
+  category: time
+  difficulty: medium
+  split: test
+  question: How much revenue did we make last year?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 79
+  category: time
+  difficulty: medium
+  split: test
+  question: How many orders were placed in Q3 2024?
+  gold_sql: |
+    SELECT COUNT(*) AS orders FROM orders
+    WHERE status = 'completed' AND order_date BETWEEN '2024-07-01' AND '2024-09-30'
+
+- id: 80
+  category: time
+  difficulty: medium
+  split: test
+  question: What was revenue in the first half of 2025?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-06-30'
+
+- id: 81
+  category: time
+  difficulty: medium
+  split: test
+  question: Which quarter of 2025 had the highest revenue?
+  gold_sql: |
+    SELECT date_trunc('quarter', o.order_date)::date AS quarter, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY revenue DESC LIMIT 1
+
+- id: 82
+  category: time
+  difficulty: medium
+  split: test
+  question: Weekly revenue in November 2025
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('week', o.order_date)::date AS week, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-11-01' AND '2025-11-30'
+    GROUP BY 1 ORDER BY 1
+
+- id: 83
+  category: time
+  difficulty: medium
+  split: test
+  question: How many customers signed up each quarter across 2024 and 2025?
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('quarter', signup_date)::date AS quarter, COUNT(*) AS new_customers
+    FROM customers WHERE signup_date BETWEEN '2024-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 84
+  category: time
+  difficulty: medium
+  split: test
+  question: How much revenue did we make on weekends in 2024?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+      AND EXTRACT(ISODOW FROM o.order_date) >= 6
+
+- id: 85
+  category: time
+  difficulty: medium
+  split: test
+  question: How many orders were returned each month in 2025?
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('month', order_date)::date AS month, COUNT(*) AS returned_orders
+    FROM orders WHERE status = 'returned' AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 86
+  category: time
+  difficulty: hard
+  split: test
+  question: Compare revenue in Q4 2024 with Q4 2025
+  gold_sql: |
+    SELECT date_trunc('quarter', o.order_date)::date AS quarter, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed'
+      AND (o.order_date BETWEEN '2024-10-01' AND '2024-12-31' OR o.order_date BETWEEN '2025-10-01' AND '2025-12-31')
+    GROUP BY 1
+
+- id: 87
+  category: time
+  difficulty: medium
+  split: test
+  question: Monthly revenue for the Fashion category in 2025
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('month', o.order_date)::date AS month, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND c.name = 'Fashion' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 88
+  category: time
+  difficulty: medium
+  split: test
+  question: How many orders did enterprise customers place in each quarter of 2025?
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('quarter', o.order_date)::date AS quarter, COUNT(*) AS orders
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    WHERE o.status = 'completed' AND cu.segment = 'enterprise' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 89
+  category: time
+  difficulty: medium
+  split: test
+  question: Which month of 2024 had the most returns?
+  gold_sql: |
+    SELECT date_trunc('month', order_date)::date AS month, COUNT(*) AS returned_orders
+    FROM orders WHERE status = 'returned' AND order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY 1 ORDER BY returned_orders DESC LIMIT 1
+
+- id: 90
+  category: advanced
+  difficulty: hard
+  split: test
+  question: What was the revenue growth for each category from 2024 to 2025, in percent?
+  gold_sql: |
+    WITH yearly AS (
+      SELECT c.name AS category,
+             SUM(oi.quantity * oi.unit_price) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 2024) AS rev_2024,
+             SUM(oi.quantity * oi.unit_price) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 2025) AS rev_2025
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      JOIN categories c ON c.category_id = p.category_id
+      WHERE o.status = 'completed'
+      GROUP BY c.name
+    )
+    SELECT category, ROUND((rev_2025 - rev_2024) / rev_2024 * 100, 2) AS growth_pct FROM yearly
+
+- id: 91
+  category: advanced
+  difficulty: hard
+  split: test
+  question: What is the return rate in each region?
+  gold_sql: |
+    SELECT r.name AS region,
+           ROUND(COUNT(*) FILTER (WHERE o.status = 'returned') * 100.0 / COUNT(*), 2) AS return_rate_pct
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    WHERE o.status IN ('completed', 'returned')
+    GROUP BY r.name
+
+- id: 92
+  category: advanced
+  difficulty: hard
+  split: test
+  question: Show the cancellation rate for each month of 2025
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('month', order_date)::date AS month,
+           ROUND(COUNT(*) FILTER (WHERE status = 'cancelled') * 100.0 / COUNT(*), 2) AS cancellation_rate_pct
+    FROM orders WHERE order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 93
+  category: advanced
+  difficulty: hard
+  split: test
+  question: What percentage of 2024 revenue came from each region?
+  gold_sql: |
+    SELECT r.name AS region,
+           ROUND(SUM(oi.quantity * oi.unit_price) * 100 / SUM(SUM(oi.quantity * oi.unit_price)) OVER (), 2) AS revenue_share_pct
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY r.name
+
+- id: 94
+  category: advanced
+  difficulty: hard
+  split: test
+  question: Show the running total of orders by month in 2024
+  ordered: true
+  gold_sql: |
+    SELECT month, SUM(orders) OVER (ORDER BY month) AS cumulative_orders
+    FROM (
+      SELECT date_trunc('month', order_date)::date AS month, COUNT(*) AS orders
+      FROM orders WHERE status = 'completed' AND order_date BETWEEN '2024-01-01' AND '2024-12-31'
+      GROUP BY 1
+    ) m ORDER BY month
+
+- id: 95
+  category: advanced
+  difficulty: hard
+  split: test
+  question: What were the top 2 products by revenue in each region in 2025?
+  gold_sql: |
+    SELECT region, product, revenue FROM (
+      SELECT r.name AS region, p.name AS product, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue,
+             ROW_NUMBER() OVER (PARTITION BY r.name ORDER BY SUM(oi.quantity * oi.unit_price) DESC) AS rn
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN products p ON p.product_id = oi.product_id
+      JOIN customers cu ON cu.customer_id = o.customer_id
+      JOIN regions r ON r.region_id = cu.region_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY r.name, p.product_id, p.name
+    ) ranked WHERE rn <= 2
+
+- id: 96
+  category: advanced
+  difficulty: hard
+  split: test
+  question: Which customer segment has the highest return rate?
+  gold_sql: |
+    SELECT cu.segment, ROUND(COUNT(*) FILTER (WHERE o.status = 'returned') * 100.0 / COUNT(*), 2) AS return_rate_pct
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    WHERE o.status IN ('completed', 'returned')
+    GROUP BY cu.segment ORDER BY return_rate_pct DESC LIMIT 1
+
+- id: 97
+  category: advanced
+  difficulty: hard
+  split: test
+  question: On average, how many units are in a completed order, by channel?
+  gold_sql: |
+    SELECT o.channel, ROUND(SUM(oi.quantity)::numeric / COUNT(DISTINCT o.order_id), 2) AS units_per_order
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed'
+    GROUP BY o.channel
+
+- id: 98
+  category: advanced
+  difficulty: hard
+  split: test
+  question: How many customers placed their first ever order in 2025?
+  gold_sql: |
+    SELECT COUNT(*) AS customers FROM (
+      SELECT customer_id, MIN(order_date) AS first_order FROM orders WHERE status = 'completed' GROUP BY customer_id
+    ) f WHERE first_order BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 99
+  category: advanced
+  difficulty: hard
+  split: test
+  question: What percentage of 2025 revenue came from the top 10 products?
+  gold_sql: |
+    WITH by_product AS (
+      SELECT oi.product_id, SUM(oi.quantity * oi.unit_price) AS revenue
+      FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY oi.product_id
+    )
+    SELECT ROUND((SELECT SUM(revenue) FROM (SELECT revenue FROM by_product ORDER BY revenue DESC LIMIT 10) t) * 100
+                 / (SELECT SUM(revenue) FROM by_product), 2) AS top10_share_pct
+
+- id: 100
+  category: advanced
+  difficulty: hard
+  split: test
+  question: For each segment, what is the average number of days between signing up and a customer's first order?
+  gold_sql: |
+    SELECT cu.segment, ROUND(AVG(f.first_order - cu.signup_date), 2) AS avg_days_to_first_order
+    FROM customers cu JOIN (
+      SELECT customer_id, MIN(order_date) AS first_order FROM orders WHERE status = 'completed' GROUP BY customer_id
+    ) f ON f.customer_id = cu.customer_id
+    GROUP BY cu.segment
+
+- id: 101
+  category: advanced
+  difficulty: hard
+  split: test
+  question: How many products had no completed sales in 2025?
+  gold_sql: |
+    SELECT COUNT(*) AS products FROM products p
+    WHERE NOT EXISTS (
+      SELECT 1 FROM order_items oi JOIN orders o ON o.order_id = oi.order_id
+      WHERE oi.product_id = p.product_id AND o.status = 'completed'
+        AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    )
+
+- id: 102
+  category: joins
+  difficulty: medium
+  split: test
+  question: Rank the regions by 2025 revenue
+  ordered: true
+  gold_sql: |
+    SELECT r.name AS region, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name ORDER BY revenue DESC
+
+- id: 103
+  category: advanced
+  difficulty: hard
+  split: test
+  question: How many customers ordered in both 2024 and 2025?
+  gold_sql: |
+    SELECT COUNT(*) AS customers FROM (
+      SELECT customer_id FROM orders WHERE status = 'completed'
+      GROUP BY customer_id
+      HAVING COUNT(*) FILTER (WHERE EXTRACT(YEAR FROM order_date) = 2024) > 0
+         AND COUNT(*) FILTER (WHERE EXTRACT(YEAR FROM order_date) = 2025) > 0
+    ) both_years
+
+- id: 104
+  category: advanced
+  difficulty: hard
+  split: test
+  question: What was the average revenue per ordering customer in each region in 2025?
+  gold_sql: |
+    SELECT r.name AS region, ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.customer_id), 2) AS revenue_per_customer
+    FROM orders o JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name
+
+- id: 105
+  category: advanced
+  difficulty: hard
+  split: test
+  question: Which month of 2025 had the highest average order value?
+  gold_sql: |
+    SELECT date_trunc('month', o.order_date)::date AS month,
+           ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS aov
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY 1 ORDER BY aov DESC LIMIT 1
+
+- id: 106
+  category: advanced
+  difficulty: medium
+  split: test
+  question: What was the cancellation rate in 2024?
+  gold_sql: |
+    SELECT ROUND(COUNT(*) FILTER (WHERE status = 'cancelled') * 100.0 / COUNT(*), 2) AS cancellation_rate_pct
+    FROM orders WHERE order_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+- id: 107
+  category: advanced
+  difficulty: medium
+  split: test
+  question: What was our return rate in 2025?
+  gold_sql: |
+    SELECT ROUND(COUNT(*) FILTER (WHERE status = 'returned') * 100.0 / COUNT(*), 2) AS return_rate_pct
+    FROM orders WHERE status IN ('completed', 'returned') AND order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 108
+  category: advanced
+  difficulty: hard
+  split: test
+  question: What is the return rate for each sales channel?
+  gold_sql: |
+    SELECT channel, ROUND(COUNT(*) FILTER (WHERE status = 'returned') * 100.0 / COUNT(*), 2) AS return_rate_pct
+    FROM orders WHERE status IN ('completed', 'returned')
+    GROUP BY channel
+
+- id: 109
+  category: advanced
+  difficulty: hard
+  split: test
+  question: Which category added the most revenue from 2024 to 2025, in rupees?
+  gold_sql: |
+    SELECT c.name AS category,
+           ROUND(SUM(oi.quantity * oi.unit_price) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 2025)
+               - SUM(oi.quantity * oi.unit_price) FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 2024), 2) AS revenue_change
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed'
+    GROUP BY c.name ORDER BY revenue_change DESC LIMIT 1
+
+- id: 110
+  category: advanced
+  difficulty: hard
+  split: test
+  question: How many customers spent more than ₹1,00,000 in 2025?
+  gold_sql: |
+    SELECT COUNT(*) AS customers FROM (
+      SELECT o.customer_id FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+      GROUP BY o.customer_id HAVING SUM(oi.quantity * oi.unit_price) > 100000
+    ) big_spenders
+
+- id: 111
+  category: joins
+  difficulty: medium
+  split: test
+  question: What was the total cost of goods sold in 2025?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * p.unit_cost), 2) AS cost
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 112
+  category: joins
+  difficulty: medium
+  split: test
+  question: What was our total profit in 2025?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * (oi.unit_price - p.unit_cost)), 2) AS profit
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 113
+  category: joins
+  difficulty: medium
+  split: test
+  question: What was the overall profit margin in 2024?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * (oi.unit_price - p.unit_cost)) / SUM(oi.quantity * oi.unit_price) * 100, 2) AS margin_pct
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+- id: 114
+  category: simple
+  difficulty: easy
+  split: test
+  question: How many orders have been placed in total, including cancelled and returned ones?
+  gold_sql: |
+    SELECT COUNT(*) AS orders FROM orders
+
+- id: 115
+  category: joins
+  difficulty: medium
+  split: test
+  question: How many Pro Laptops did we sell in 2025?
+  gold_sql: |
+    SELECT SUM(oi.quantity) AS units
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    WHERE o.status = 'completed' AND p.name = 'Pro Laptop' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+
+- id: 116
+  category: joins
+  difficulty: medium
+  split: test
+  question: How much revenue did the Ultra Smartwatch bring in during 2024?
+  gold_sql: |
+    SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    WHERE o.status = 'completed' AND p.name = 'Ultra Smartwatch' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+
+- id: 117
+  category: time
+  difficulty: medium
+  split: test
+  question: Monthly revenue from the Toys category in 2024
+  ordered: true
+  gold_sql: |
+    SELECT date_trunc('month', o.order_date)::date AS month, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    WHERE o.status = 'completed' AND c.name = 'Toys' AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
+    GROUP BY 1 ORDER BY 1
+
+- id: 118
+  category: joins
+  difficulty: medium
+  split: test
+  question: Which region spent the most on Groceries in 2025?
+  gold_sql: |
+    SELECT r.name AS region, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN products p ON p.product_id = oi.product_id
+    JOIN categories c ON c.category_id = p.category_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    WHERE o.status = 'completed' AND c.name = 'Groceries' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY r.name ORDER BY revenue DESC LIMIT 1
+
+- id: 119
+  category: advanced
+  difficulty: hard
+  split: test
+  question: Who were the top 5 customers in the North region by revenue in 2025?
+  ordered: true
+  gold_sql: |
+    SELECT cu.name AS customer, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    JOIN regions r ON r.region_id = cu.region_id
+    WHERE o.status = 'completed' AND r.name = 'North' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY cu.customer_id, cu.name ORDER BY revenue DESC LIMIT 5
+
+- id: 120
+  category: advanced
+  difficulty: hard
+  split: test
+  question: For each customer segment, what share of its 2025 revenue came through the mobile channel?
+  gold_sql: |
+    SELECT cu.segment,
+           ROUND(SUM(oi.quantity * oi.unit_price) FILTER (WHERE o.channel = 'mobile') * 100
+                 / SUM(oi.quantity * oi.unit_price), 2) AS mobile_share_pct
+    FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN customers cu ON cu.customer_id = o.customer_id
+    WHERE o.status = 'completed' AND o.order_date BETWEEN '2025-01-01' AND '2025-12-31'
+    GROUP BY cu.segment
