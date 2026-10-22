@@ -24,7 +24,7 @@ class RouteDecision(BaseModel):
 
 
 def route(llm: LLM, question: str, tables: list[str]) -> RouteDecision:
-    return llm.structured(RouteDecision, SYSTEM.format(tables=", ".join(tables)), question)
+    return llm.structured(RouteDecision, SYSTEM.format(tables=", ".join(tables)), question, tier="fast")
 
 
 SCHEMA_SYSTEM = """You help business users understand what data they can ask about.

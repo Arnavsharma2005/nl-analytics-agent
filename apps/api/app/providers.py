@@ -34,12 +34,15 @@ def build_providers(s: Settings) -> list[Provider]:
             raise ValueError(f"Unknown provider {name!r} in LLM_PROVIDERS; choose from {', '.join(CATALOG)}")
         label, base_url, default_model = CATALOG[name]
         model = getattr(s, f"{name}_model") or default_model
+        fast_model = getattr(s, f"{name}_fast_model")
         providers.append(Provider(
             name=name,
             label=f"{label} · {model.removeprefix('@cf/')}",
             base_url=base_url.format(account_id=s.cloudflare_account_id or ""),
             model=model,
             api_key=keys[name],
+            fast_model=fast_model,
+            fast_label=f"{label} · {fast_model.removeprefix('@cf/')}" if fast_model else None,
         ))
     return providers
 

@@ -136,7 +136,7 @@ def choose_chart(llm: LLM, question: str, columns: list[str], rows: list[list], 
         f"First rows: {json.dumps(rows[:sample], default=str)}"
     )
     try:
-        spec = llm.structured(ChartSpec, SYSTEM, user)
+        spec = llm.structured(ChartSpec, SYSTEM, user, tier="fast")
     except Exception:  # noqa: BLE001 - a chart is never worth failing the answer for
         return heuristic_chart(question, columns, rows), "fallback"
     if validate_chart(spec, columns, rows) is None:

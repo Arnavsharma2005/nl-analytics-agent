@@ -11,18 +11,22 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Protocol, TypeVar, runtime_checkable
+from dataclasses import dataclass, replace
+from typing import Literal, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel, ValidationError
 
 T = TypeVar("T", bound=BaseModel)
 
+# "fast" asks for a provider's cheaper, higher-quota model where one is configured (routing, chart choice);
+# "strong" is its best model (SQL, summaries, schema answers). Providers without a fast model use the strong one.
+Tier = Literal["fast", "strong"]
+
 
 class LLM(Protocol):
-    def structured(self, output: type[T], system: str, user: str) -> T: ...
+    def structured(self, output: type[T], system: str, user: str, *, tier: Tier = "strong") -> T: ...
 
-    def text(self, system: str, user: str) -> str: ...
+    def text(self, system: str, user: str, *, tier: Tier = "strong") -> str: ...
 
 
 @runtime_checkable
@@ -41,6 +45,16 @@ class Provider:
     base_url: str
     model: str
     api_key: str | None
+    fast_model: str | None = None  # used for tier="fast" calls when set
+    fast_label: str | None = None
+
+    def for_tier(self, tier: Tier) -> "Provider":
+        """The provider to call for `tier`. A fast model is its own provider, named "<name>:fast", so it has its
+        own client, cooldown and budget."""
+        if tier == "fast" and self.fast_model:
+            return replace(self, name=f"{self.name}:fast", model=self.fast_model, label=self.fast_label or self.label,
+                           fast_model=None, fast_label=None)
+        return self
 
 
 BUDGET_USED = "daily budget used"
@@ -114,8 +128,10 @@ def _openai_client(provider: Provider, timeout: float):
 
 
 class FallbackLLM:
-    """`budget`, if given, is asked before every call to a provider (by its name) and returns False once that
-    provider's daily budget is spent; the provider is then skipped like one that is cooling down."""
+    """`budget`, if given, is asked before every call to a provider and returns False once that provider's daily
+    budget is spent; the provider is then skipped like one that is cooling down. Budgets are named after the
+    provider ("groq"), with ":fast" for its fast model ("groq:fast"), since free tiers limit each model separately;
+    cooldowns are per model too."""
 
     def __init__(self, providers: list[Provider], timeout: float = 30, client_factory: Callable | None = None,
                  clock: Callable[[], float] = time.monotonic, budget: Callable[[str], bool] | None = None):
@@ -144,9 +160,10 @@ class FallbackLLM:
         self._local.log.append(entry)
 
     # --- provider selection -----------------------------------------------------------------------------
-    def available(self) -> list[Provider]:
+    def available(self, tier: Tier = "strong") -> list[Provider]:
         now = self._clock()
-        return [p for p in self.providers if p.api_key and self._cooldown_until.get(p.name, 0) <= now]
+        models = [p.for_tier(tier) for p in self.providers if p.api_key]
+        return [p for p in models if self._cooldown_until.get(p.name, 0) <= now]
 
     def status(self) -> list[dict]:
         now = self._clock()
@@ -166,9 +183,9 @@ class FallbackLLM:
                 self._clients[p.name] = self._factory(p, self.timeout)
             return self._clients[p.name]
 
-    def _run(self, system: str, user: str, parse: Callable[[str], object]):
+    def _run(self, system: str, user: str, parse: Callable[[str], object], tier: Tier):
         errors = []
-        for p in self.available():
+        for p in self.available(tier):
             start = time.perf_counter()
             if self._budget and not self._budget(p.name):
                 errors.append({"provider": p.label, "error": BUDGET_USED})
@@ -189,22 +206,22 @@ class FallbackLLM:
             return result
         raise AllProvidersFailed(errors)
 
-    def structured(self, output: type[T], system: str, user: str) -> T:
+    def structured(self, output: type[T], system: str, user: str, *, tier: Tier = "strong") -> T:
         # Plain-JSON prompting works on every provider, unlike tool calling or strict schemas.
         schema = json.dumps(output.model_json_schema(), separators=(",", ":"))
         system = (
             f"{system}\n\nRespond with ONLY a JSON object, no prose and no markdown, that matches this JSON schema:\n{schema}"
         )
-        return self._run(system, user, lambda raw: parse_json(raw, output))
+        return self._run(system, user, lambda raw: parse_json(raw, output), tier)
 
-    def text(self, system: str, user: str) -> str:
+    def text(self, system: str, user: str, *, tier: Tier = "strong") -> str:
         def parse(raw: str) -> str:
             out = _THINK.sub("", raw).strip()
             if not out:
                 raise BadOutput("empty reply")
             return out
 
-        return self._run(system, user, parse)
+        return self._run(system, user, parse, tier)
 
 
 def _content(reply) -> str:

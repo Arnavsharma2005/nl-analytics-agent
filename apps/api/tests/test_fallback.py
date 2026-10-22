@@ -138,3 +138,38 @@ def test_settings_read_the_repo_root_env_file():
 
     root_env = Path(__file__).resolve().parents[3] / ".env"
     assert root_env in [Path(p) for p in Settings.model_config["env_file"]]
+
+
+def test_fast_tier_uses_the_fast_model_with_its_own_cooldown_and_budget():
+    made, spent = [], []
+
+    def factory(p, timeout):
+        made.append((p.name, p.model))
+        return FakeClient([HTTPError(429, "Rate limit reached for requests per day")] if p.model == "small" else ['{"value": 1}'])
+
+    groq = Provider("groq", "Groq · big", "https://x", "big", "k", fast_model="small", fast_label="Groq · small")
+    llm = FallbackLLM([groq, Provider("mistral", "Mistral · m", "https://x", "m", "k")], client_factory=factory,
+                      budget=lambda name: spent.append(name) or True)
+    llm.start_log()
+    assert llm.structured(Answer, "s", "u", tier="fast").value == 1  # groq's small model is rate limited
+    assert [c["provider"] for c in llm.take_log()] == ["Groq · small", "Mistral · m"]
+    assert llm.structured(Answer, "s", "u").value == 1  # the big model is not cooling down
+    assert made == [("groq:fast", "small"), ("mistral", "m"), ("groq", "big")]
+    assert spent == ["groq:fast", "mistral", "groq"]
+    assert [p["name"] for p in llm.status()] == ["groq", "mistral"] and llm.status()[0]["cooling_down_s"] == 0
+
+
+def test_without_a_fast_model_both_tiers_use_the_main_model():
+    calls = []
+    llm = FallbackLLM([Provider("groq", "Groq · big", "https://x", "big", "k")],
+                      client_factory=lambda p, t: calls.append(p.model) or FakeClient(['{"value": 2}']))
+    assert llm.structured(Answer, "s", "u", tier="fast").value == 2
+    assert llm.structured(Answer, "s", "u").value == 2
+    assert calls == ["big"]  # one client, shared by both tiers
+
+
+def test_fast_models_come_from_settings():
+    s = Settings(_env_file=None, groq_api_key="k", llm_providers="groq,mistral", groq_fast_model="llama-3.1-8b-instant")
+    groq, mistral = build_providers(s)
+    assert groq.fast_model == "llama-3.1-8b-instant" and groq.fast_label == "Groq · llama-3.1-8b-instant"
+    assert mistral.fast_model is None

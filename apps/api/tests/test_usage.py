@@ -221,7 +221,7 @@ def test_failed_or_partial_answers_are_not_cached(db, app_tables):
     Analyst(FakeLLM(intent="out_of_scope"), db, cache=cache).ask("weather?")
 
     class NoSummary(FakeLLM):
-        def text(self, system, user):
+        def text(self, system, user, tier="strong"):
             raise AllProvidersFailed([{"provider": "x", "error": "rate limited"}])
 
     Analyst(NoSummary(sql=[REVENUE_BY_REGION]), db, cache=cache).ask("Revenue by region")

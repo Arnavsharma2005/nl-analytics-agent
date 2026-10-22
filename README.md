@@ -54,6 +54,11 @@ fallback chain of five providers, all reached through their OpenAI-compatible en
 - Each answer shows which model wrote it and which providers it fell back past.
   `GET /api/providers` lists the chain and any cooldowns, and never returns keys.
 - Reorder the chain with `LLM_PROVIDERS`, and override a model with `<PROVIDER>_MODEL`, e.g. `GROQ_MODEL=qwen/qwen3.6-27b`.
+- **Model tiers.** Routing the question and choosing the chart are light work, so they can run on a provider's
+  cheaper model with a much larger free quota: set `<PROVIDER>_FAST_MODEL`, e.g. `GROQ_FAST_MODEL=llama-3.1-8b-instant`.
+  SQL, summaries and schema answers always use the main model. A fast model has its own cooldown and its own
+  budget (`"groq:fast"` in `LLM_DAILY_BUDGET`). Unset, every step uses the main model. Check the eval before and
+  after turning one on.
 
 Free model lists change often, so check each provider's model page if one reports "model not found".
 

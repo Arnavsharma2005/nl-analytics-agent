@@ -15,7 +15,7 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 
-from app.llm import LLM, AllProvidersFailed, CallLogging
+from app.llm import LLM, AllProvidersFailed, CallLogging, Tier
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -23,6 +23,11 @@ T = TypeVar("T", bound=BaseModel)
 class CassetteMiss(KeyError):
     def __init__(self, kind: str, user: str):
         super().__init__(f"no recorded {kind} answer for this prompt (record the cassette again): {user[:200]!r}")
+
+
+def _kind(name: str, tier: Tier) -> str:
+    # Answers from the fast and strong models are kept apart, so changing which steps use which tier is a miss.
+    return name if tier == "strong" else f"{name}@fast"
 
 
 def _key(kind: str, system: str, user: str) -> str:
@@ -37,22 +42,24 @@ class RecordingLLM:
         self._entries: dict[str, dict] = {}
         self._lock = threading.Lock()
 
-    def structured(self, output: type[T], system: str, user: str) -> T:
+    def structured(self, output: type[T], system: str, user: str, *, tier: Tier = "strong") -> T:
+        kind = _kind(output.__name__, tier)
         try:
-            result = self._inner.structured(output, system, user)
+            result = self._inner.structured(output, system, user, tier=tier)
         except AllProvidersFailed as e:
-            self._keep(output.__name__, system, user, {"failed": e.errors})
+            self._keep(kind, system, user, {"failed": e.errors})
             raise
-        self._keep(output.__name__, system, user, {"ok": result.model_dump(mode="json")})
+        self._keep(kind, system, user, {"ok": result.model_dump(mode="json")})
         return result
 
-    def text(self, system: str, user: str) -> str:
+    def text(self, system: str, user: str, *, tier: Tier = "strong") -> str:
+        kind = _kind("text", tier)
         try:
-            result = self._inner.text(system, user)
+            result = self._inner.text(system, user, tier=tier)
         except AllProvidersFailed as e:
-            self._keep("text", system, user, {"failed": e.errors})
+            self._keep(kind, system, user, {"failed": e.errors})
             raise
-        self._keep("text", system, user, {"ok": result})
+        self._keep(kind, system, user, {"ok": result})
         return result
 
     def start_log(self) -> None:
@@ -82,11 +89,11 @@ class ReplayLLM:
         self._served: dict[str, int] = {}
         self._lock = threading.Lock()
 
-    def structured(self, output: type[T], system: str, user: str) -> T:
-        return output.model_validate(self._next(output.__name__, system, user))
+    def structured(self, output: type[T], system: str, user: str, *, tier: Tier = "strong") -> T:
+        return output.model_validate(self._next(_kind(output.__name__, tier), system, user))
 
-    def text(self, system: str, user: str) -> str:
-        return self._next("text", system, user)
+    def text(self, system: str, user: str, *, tier: Tier = "strong") -> str:
+        return self._next(_kind("text", tier), system, user)
 
     def _next(self, kind: str, system: str, user: str):
         key = _key(kind, system, user)
