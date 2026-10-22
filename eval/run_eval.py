@@ -163,6 +163,7 @@ def main() -> int:
     run_at = datetime.now(UTC)
     commit = git_commit()
     summary = {
+        "set": "conversations" if args.conversations else "questions",
         "providers_configured": providers,
         "features": [name for name, on in features.items() if on],
         "sql_written_by": dict(Counter(r["sql_provider"] for r in results if r["sql_provider"])),
