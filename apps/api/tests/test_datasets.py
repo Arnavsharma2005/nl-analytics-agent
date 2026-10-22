@@ -300,3 +300,13 @@ def test_with_uploads_off_a_dataset_id_is_not_found(make, monkeypatch):
     r = ask(same_visitor, dataset["id"])
     assert r.status_code == 404 and r.json()["code"] == "dataset_not_found"
     assert ask(client, dataset["id"]).status_code == 200  # the owner's own file, with uploads on
+
+
+def test_a_shared_answer_about_an_upload_names_the_file(make):
+    client = make()
+    dataset = upload(client).json()
+    message = ask(client, dataset["id"]).json()
+    share = client.post(f"/v1/messages/{message['id']}/share").json()
+    assert share["about"] == "sales.csv"
+    client.delete(f"/v1/datasets/{dataset['id']}")
+    assert client.get(f"/v1/shares/{share['id']}").json()["answer"]["rows"][0] == ["Bengaluru", 3550.4]

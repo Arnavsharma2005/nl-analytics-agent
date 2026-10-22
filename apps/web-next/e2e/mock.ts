@@ -1,6 +1,6 @@
 /** A fake API for the browser tests: answers /v1 and /healthz from fixtures, and records what the page sent. */
 import type { Page, Route } from "@playwright/test";
-import type { ConversationSummary, Dataset, Message, StreamEvents, User } from "../src/api/types";
+import type { ConversationSummary, Dataset, Message, Share, StreamEvents, User } from "../src/api/types";
 
 export const STARTERS = ["Revenue by region", "Monthly revenue trend in 2025", "Top 5 products by revenue"];
 
@@ -59,6 +59,14 @@ export const SALES_CSV: Dataset = {
   expires_at: new Date(Date.now() + 86_400_000).toISOString(),
 };
 
+/** A shared snapshot of message `m`, as the API returns it. */
+export function shareOf(m: Message, id = "AbCdEfGhIjKlMnOp", about: string | null = null): Share {
+  return {
+    id, question: m.question, about, asked_at: m.created_at, expires_at: "2027-01-20T10:00:00Z",
+    answer: { ...m.answer, llm_calls: [], failures: [], timings: {} },
+  };
+}
+
 type Events = [keyof StreamEvents, unknown][];
 
 export const sse = (events: Events) => events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join("");
@@ -91,6 +99,9 @@ export interface Api {
   datasets: Dataset[];
   uploaded: string[];
   upload: (name: string) => { status: number; body: unknown };
+  /** Shared answers by link id, and the message ids that were shared. */
+  shares: Record<string, Share>;
+  shared: string[];
 }
 
 export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise<Api> {
@@ -105,6 +116,8 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     datasets: [],
     uploaded: [],
     upload: () => ({ status: 201, body: SALES_CSV }),
+    shares: {},
+    shared: [],
     ...overrides,
   };
   const json = (route: Route, body: unknown, status = 200) =>
@@ -162,6 +175,22 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
       return route.fulfill({ status: 204 });
     }
     return json(route, found);
+  });
+  await page.route("**/v1/messages/*/share", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/")[3];
+    api.shared.push(id);
+    const share = shareOf(message(id, "c"), `share${String(api.shared.length).padStart(11, "0")}`);
+    api.shares[share.id] = share;
+    return json(route, share);
+  });
+  await page.route("**/v1/shares/*", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/")[3];
+    if (!api.shares[id]) return json(route, { status: 404, code: "share_not_found", title: "This shared answer is not available", detail: "Shared answers are kept for 90 days." }, 404);
+    if (route.request().method() === "DELETE") {
+      delete api.shares[id];
+      return route.fulfill({ status: 204 });
+    }
+    return json(route, api.shares[id]);
   });
   await page.route("**/v1/messages/*/feedback", (route) => {
     api.feedback.push(route.request().postDataJSON());

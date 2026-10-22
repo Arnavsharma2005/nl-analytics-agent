@@ -66,6 +66,9 @@ function update(t: Turn, a: Exclude<Action, { type: "ask" | "reset" | "load" }>)
   }
 }
 
+/** A finished turn for a stored message: from an earlier conversation, or a shared answer. */
+export const fromMessage = (m: Message): Turn => answered(fresh(m.id, m.question), m);
+
 /** A turn with its finished answer: from the end of a stream, or from an earlier conversation. */
 function answered(t: Turn, message: Message): Turn {
   const answer = message.answer;
@@ -147,7 +150,7 @@ export function useConversation() {
   /** Show an earlier conversation; questions asked next carry it on, follow-ups included. */
   const open = useCallback((id: string, messages: Message[], about: Subject) => {
     switchTo(about, id);
-    dispatch({ type: "load", turns: messages.map((m) => answered(fresh(m.id, m.question), m)) });
+    dispatch({ type: "load", turns: messages.map(fromMessage) });
   }, [switchTo]);
 
   return {

@@ -19,6 +19,7 @@ from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
 from app.api_auth import auth_router, is_https, signed_in_user
 from app.api_datasets import datasets_router
+from app.api_shares import shares_router
 from app.api_v1 import v1_router
 from app.auth import GitHub, Users
 from app.config import get_settings
@@ -32,6 +33,7 @@ from app.messages import Messages
 from app.problems import Problem, from_exception, install
 from app.providers import build_embedder, build_llm
 from app.sessions import COOKIE, Sessions, Turnstile
+from app.shares import Shares
 from app.transcribe import Transcriber
 from app.usage import Counters, DailyBudget, Quota, Visitor
 
@@ -123,6 +125,11 @@ def get_dataset_analysts() -> DatasetAnalysts:
 
 
 @lru_cache
+def get_shares() -> Shares:
+    return Shares(get_app_engine(), get_settings().share_keep_days)
+
+
+@lru_cache
 def get_users() -> Users:
     return Users(get_app_engine())
 
@@ -150,7 +157,8 @@ def get_transcriber() -> Transcriber | None:
 def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_llm, sessions_factory=get_sessions,
                quota_factory=get_quota, messages_factory=get_messages, suggester_factory=get_suggester,
                transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github,
-               datasets_factory=get_datasets, dataset_analysts_factory=get_dataset_analysts) -> FastAPI:
+               datasets_factory=get_datasets, dataset_analysts_factory=get_dataset_analysts,
+               shares_factory=get_shares) -> FastAPI:
     settings = get_settings()
 
     @asynccontextmanager
@@ -215,9 +223,16 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
             store=datasets_factory, analysts=dataset_analysts_factory, identify=identify, spend=spend,
             limits=Limits(settings.upload_max_mb * 1024 * 1024, settings.upload_max_rows, settings.upload_max_columns),
         ))
+    app.include_router(shares_router(shares=shares_factory, messages=messages_factory, datasets=datasets_factory,
+                                     identify=identify))
+
+    def adopt(session: str, owner: str) -> None:
+        for kept in (messages_factory(), datasets_factory(), shares_factory()):
+            kept.adopt(session, owner)
+
     app.include_router(auth_router(
-        sessions=sessions_factory, github=github_factory, users=users_factory, messages=messages_factory,
-        datasets=datasets_factory, public_url=settings.public_url, user_session_days=settings.user_session_days,
+        sessions=sessions_factory, github=github_factory, users=users_factory, adopt=adopt,
+        public_url=settings.public_url, user_session_days=settings.user_session_days,
     ))
 
     @app.get("/api/config")

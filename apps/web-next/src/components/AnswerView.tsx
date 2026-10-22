@@ -13,6 +13,7 @@ import { formatValue, humanize } from "../lib/format";
 import DataTable from "./DataTable";
 import ErrorNotice from "./ErrorNotice";
 import Feedback from "./Feedback";
+import ShareButton from "./ShareButton";
 
 const Chart = lazy(() => import("./Chart"));
 
@@ -71,15 +72,14 @@ function ReadAloud({ text }: { text: string }) {
   return <button type="button" className={action} onClick={toggle} aria-pressed={speaking}>{speaking ? "Stop reading" : "Read aloud"}</button>;
 }
 
-interface Props {
-  turn: Turn;
-  onAsk: (question: string) => void;
-  onRetry: (turn: Turn) => void;
-  onInspect: (turn: Turn) => void;
-  inspecting: boolean;
-}
+type Props =
+  | { turn: Turn; readOnly?: false; onAsk: (question: string) => void; onRetry: (turn: Turn) => void; onInspect: (turn: Turn) => void; inspecting: boolean }
+  /** A shared answer: the result and its downloads, with nothing to rate, inspect, share or ask next. */
+  | { turn: Turn; readOnly: true };
 
-export default function AnswerView({ turn, onAsk, onRetry, onInspect, inspecting }: Props) {
+export default function AnswerView(props: Props) {
+  const { turn } = props;
+  const live = props.readOnly ? null : props;
   const chart = useRef<ECharts | null>(null);
   const onReady = useCallback((c: ECharts | null) => { chart.current = c; }, []);
   const streaming = turn.status === "streaming";
@@ -103,14 +103,14 @@ export default function AnswerView({ turn, onAsk, onRetry, onInspect, inspecting
 
       {streaming && !turn.summary && <StepTrail steps={turn.steps} />}
 
-      {turn.status === "failed" && turn.error && <ErrorNotice error={turn.error} onRetry={() => onRetry(turn)} />}
+      {turn.status === "failed" && turn.error && <ErrorNotice error={turn.error} onRetry={() => live?.onRetry(turn)} />}
 
       {answer && answer.intent !== "data_query" && <p className="max-w-[68ch] text-lg leading-relaxed">{answer.answer}</p>}
 
       {answer?.error && (
         <ErrorNotice
           error={{ title: "This question couldn't be answered", detail: answer.error, canRetry: true }}
-          onRetry={() => onRetry(turn)}
+          onRetry={live ? () => live.onRetry(turn) : undefined}
         />
       )}
 
@@ -152,9 +152,13 @@ export default function AnswerView({ turn, onAsk, onRetry, onInspect, inspecting
 
       {message && (
         <div className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-2">
-          <Feedback messageId={message.id} />
-          <span className="mx-1 h-5 w-px bg-rule" aria-hidden="true" />
-          <button type="button" className={action} aria-expanded={inspecting} onClick={() => onInspect(turn)}>How this was answered</button>
+          {live && (
+            <>
+              <Feedback messageId={message.id} />
+              <span className="mx-1 h-5 w-px bg-rule" aria-hidden="true" />
+              <button type="button" className={action} aria-expanded={live.inspecting} onClick={() => live.onInspect(turn)}>How this was answered</button>
+            </>
+          )}
           {table && rows.length > 0 && (
             <button type="button" className={action} onClick={() => save(fileName(turn.question, "csv"), new Blob([toCSV(table.columns, rows)], { type: "text/csv" }))}>
               Download CSV
@@ -162,16 +166,17 @@ export default function AnswerView({ turn, onAsk, onRetry, onInspect, inspecting
           )}
           {table && drawable(spec, rows) && <button type="button" className={action} onClick={savePNG}>Save chart</button>}
           {turn.summary && <ReadAloud text={turn.summary} />}
+          {live && !answer?.error && <ShareButton messageId={message.id} />}
         </div>
       )}
 
-      {message && message.suggestions.length > 0 && (
+      {live && message && message.suggestions.length > 0 && (
         <nav className="mt-6" aria-label="Follow-up questions">
           <h3 className="mb-2 text-sm text-muted">Ask next</h3>
           <ul className="flex flex-col items-start gap-1">
             {message.suggestions.map((s) => (
               <li key={s}>
-                <button type="button" onClick={() => onAsk(s)} className="text-left text-ink underline decoration-rule decoration-2 underline-offset-4 hover:decoration-ink">
+                <button type="button" onClick={() => live.onAsk(s)} className="text-left text-ink underline decoration-rule decoration-2 underline-offset-4 hover:decoration-ink">
                   {s}
                 </button>
               </li>

@@ -12,6 +12,7 @@ export type Me = Schemas["MeV1"];
 export type User = Schemas["UserV1"];
 export type ConversationSummary = Schemas["ConversationV1"];
 export type Dataset = Schemas["DatasetV1"];
+export type Share = Schemas["ShareV1"];
 export type DatasetColumn = Schemas["ColumnV1"];
 export type Cell = string | number | boolean | null;
 

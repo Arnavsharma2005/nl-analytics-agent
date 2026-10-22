@@ -152,6 +152,8 @@ app. The full schema is at `/docs` while the app runs.
 | `GET` | `/v1/messages/{id}` | A message you asked (messages are kept for 7 days and belong to your session) |
 | `POST` | `/v1/messages/{id}/feedback` | `{"rating": "up" \| "down", "category": "wrong_data" \| "misunderstood" \| "wrong_chart" \| "lost_context" \| "other", "comment": "..."}` |
 | `POST` | `/v1/messages/{id}/explain` | The answer's SQL as plain-English steps (one model call, then kept) |
+| `POST` | `/v1/messages/{id}/share` | Share one of your answers: a read-only snapshot at `/s/{id}` that anyone with the link can open without signing in. Nothing is run again when it is opened; the same answer always gets the same link; links last 90 days |
+| `GET`, `DELETE` | `/v1/shares/{id}` | A shared answer (anyone with the link), or stop sharing it (its owner) |
 | `POST` | `/v1/transcribe` | Multipart `audio` (webm, ogg, mp4, mpeg, wav or m4a, up to 2 MB) → `{"text": "..."}`, with Whisper on Groq; the key stays on the server |
 | `POST` | `/v1/datasets` | Multipart `file`: a CSV file → its id, table and column names, row count, a profile of each column (personal ones marked) and three suggested questions. Ask about it by adding `"dataset_id"` to a question. It counts as a question against the limits; you can keep 3 at a time, for a day |
 | `GET` | `/v1/datasets` | Your uploaded files that haven't expired |
