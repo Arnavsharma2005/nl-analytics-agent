@@ -76,6 +76,7 @@ cd apps/api
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 python -m app.seed                 # create tables and load the sample data
+alembic upgrade head               # create the app's own tables (usage limits, answer cache)
 uvicorn app.main:app --reload      # API on http://localhost:8000
 
 cd ../web
@@ -93,6 +94,8 @@ Errors are [problem details](docs/errors.md) with a stable `code` to branch on.
 | --- | --- | --- |
 | `POST` | `/api/ask` | `{"question": "..."}` → chart spec, summary, SQL, rows, attempts, timings |
 | `POST` | `/api/ask/stream` | Same, as server-sent events: one `step` event per agent, then `result` |
+| `POST` | `/api/session` | `{"turnstile_token": "..."}` → a visitor session cookie (the token is needed only when the bot check is on) |
+| `GET` | `/api/config` | Settings the web app needs, such as the Turnstile site key |
 | `GET` | `/api/schema` | Tables and columns |
 | `GET` | `/api/providers` | Fallback chain: which providers are configured and which are cooling down |
 | `GET` | `/api/examples` | Example questions |
@@ -137,6 +140,22 @@ single provider, e.g. `LLM_PROVIDERS=groq python eval/run_eval.py`.
 | --- | --- | --- |
 | _fill in from your run_ | | |
 
+## Usage limits
+
+The public demo runs on free model quotas, so it protects them:
+
+- **Bot check.** With `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` set, a visitor passes a Cloudflare Turnstile
+  check (usually invisible) before getting a session, and asking needs a session.
+- **Quotas.** 30 questions per session per hour and 300 per IP address per day by default.
+- **Model budgets.** `LLM_DAILY_BUDGET` caps calls per provider per day, a little under each free tier, so the app
+  shows "today's free limit is used up" instead of failing at random.
+- **Answer cache.** A repeat of a recent question is answered from the cache without any model calls, for 24 hours
+  and until the next deploy.
+
+The counters and the cache live in the app's own tables (schema `app`, migrated with `alembic upgrade head`). If
+that database is unreachable, the limits are skipped and logged rather than taking the app down. Why the app keeps
+its own fallback chain instead of LiteLLM is in [docs/adr](docs/adr/0001-keep-the-fallback-chain-over-litellm.md).
+
 ## Tests
 
 ```bash
@@ -171,6 +190,8 @@ apps/api/
   app/sql_guard.py, app/db.py   validation, introspection, read-only execution
   app/llm.py, app/providers.py  fallback chain across the 5 providers
   app/replay.py   record model answers to a cassette and replay them
+  app/sessions.py, app/usage.py, app/answer_cache.py   bot check, quotas, model budgets, answer cache
+  migrations/     Alembic migrations for the app's own tables
   app/main.py     FastAPI app (also serves the built frontend)
   app/seed.py     sample dataset
   tests/

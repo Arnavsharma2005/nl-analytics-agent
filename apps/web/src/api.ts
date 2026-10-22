@@ -1,3 +1,4 @@
+import { ApiError, apiError, ensureSession } from "./session";
 import type { AskResult, Step, TableInfo } from "./types";
 
 export async function getExamples(): Promise<string[]> {
@@ -10,19 +11,25 @@ export async function getSchema(): Promise<TableInfo[]> {
   return r.ok ? r.json() : [];
 }
 
-/** POST a question and read the server-sent event stream (EventSource only supports GET). */
-export async function askStream(question: string, onStep: (s: Step) => void, signal?: AbortSignal): Promise<AskResult> {
-  const r = await fetch("/api/ask/stream", {
+function postQuestion(question: string, signal?: AbortSignal): Promise<Response> {
+  return fetch("/api/ask/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
     signal,
   });
-  if (!r.ok || !r.body) {
-    // Errors are problem details (docs/errors.md); show the human-readable part.
-    const problem = await r.json().catch(() => null);
-    throw new Error(problem?.detail ?? problem?.title ?? `Request failed (${r.status})`);
+}
+
+/** POST a question and read the server-sent event stream (EventSource only supports GET). */
+export async function askStream(question: string, onStep: (s: Step) => void, signal?: AbortSignal): Promise<AskResult> {
+  await ensureSession();
+  let r = await postQuestion(question, signal);
+  if (r.status === 403) {
+    // The session expired or was never started: run the bot check again, then retry once.
+    await ensureSession(true);
+    r = await postQuestion(question, signal);
   }
+  if (!r.ok || !r.body) throw await apiError(r);
   const reader = r.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -44,7 +51,7 @@ export async function askStream(question: string, onStep: (s: Step) => void, sig
       const payload = JSON.parse(data.join("\n"));
       if (event === "step") onStep(payload);
       else if (event === "result") return payload;
-      else if (event === "error") throw new Error(payload.error);
+      else if (event === "error") throw new ApiError(payload.error, payload.code ?? null, payload.status ?? 500);
     }
   }
   throw new Error("The stream ended before a result arrived.");

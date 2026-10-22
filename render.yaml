@@ -25,6 +25,20 @@ services:
         sync: false
       - key: CLOUDFLARE_ACCOUNT_ID
         sync: false
+      # Usage limits (see SECURITY.md). Render sits behind Cloudflare, which puts the visitor's IP here.
+      - key: CLIENT_IP_HEADER
+        value: true-client-ip
+      - key: SESSION_SECRET
+        generateValue: true
+      # Cloudflare Turnstile (free): create a widget for this site's domain, then paste both keys.
+      - key: TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      # Calls per provider per UTC day, a little under each free tier (Groq: 1,000 a day for this model;
+      # OpenRouter free models: 50 a day; Cloudflare: 10,000 neurons a day).
+      - key: LLM_DAILY_BUDGET
+        value: '{"groq": 900, "openrouter": 45, "cloudflare": 250}'
 
 databases:
   - name: nl-analytics-db

@@ -5,9 +5,10 @@ It hides the LangGraph pipeline, the shape of its state, the step labels shown w
 of which model provider served each step.
 """
 
+import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -26,6 +27,7 @@ STEP_LABELS = {
     "schema_answer": "Describing the data",
     "out_of_scope": "Done",
     "give_up": "Stopped",
+    "cache": "Found a recent answer to the same question",
 }
 
 
@@ -56,6 +58,7 @@ class Answer(BaseModel):
     failures: list[Failure] = Field(default_factory=list)
     timings: dict[str, float] = Field(default_factory=dict)
     llm_calls: list[dict[str, Any]] = Field(default_factory=list)
+    cached: bool = Field(default=False, description="Served from the answer cache, without running the pipeline.")
 
     @classmethod
     def from_state(cls, state: dict[str, Any]) -> "Answer":
@@ -80,6 +83,14 @@ class Answer(BaseModel):
         )
 
 
+class Cache(Protocol):
+    """Somewhere to keep answers to questions asked before (see app/answer_cache.py)."""
+
+    def get(self, question: str) -> Answer | None: ...
+
+    def put(self, question: str, answer: Answer) -> None: ...
+
+
 @dataclass(frozen=True)
 class Step:
     """Emitted by `Analyst.stream` as each pipeline step finishes."""
@@ -102,20 +113,40 @@ class Analyst:
     Email addresses and phone numbers in results are always masked (see app/privacy.py).
     `ask` and `stream` raise `AllProvidersFailed` when no model provider can classify the question; failures
     later in the pipeline are reported inside the Answer instead.
+
+    With a `cache`, a question asked before is answered from it (marked `cached`), and complete new answers are
+    added to it.
     """
 
-    def __init__(self, llm: LLM, source: DataSource, *, max_attempts: int = 3, rows_for_llm: int = 50):
+    def __init__(self, llm: LLM, source: DataSource, *, max_attempts: int = 3, rows_for_llm: int = 50,
+                 cache: Cache | None = None):
         self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm)
+        self._cache = cache
 
     def ask(self, question: str) -> Answer:
-        return Answer.from_state(self._graph.invoke({"question": question.strip()}))
+        question = question.strip()
+        if self._cache and (hit := self._cache.get(question)):
+            return hit
+        answer = Answer.from_state(self._graph.invoke({"question": question}))
+        if self._cache:
+            self._cache.put(question, answer)
+        return answer
 
     async def stream(self, question: str) -> AsyncIterator[Step | Done]:
+        question = question.strip()
+        # The cache does blocking database calls, so keep them off the event loop.
+        if self._cache and (hit := await asyncio.to_thread(self._cache.get, question)):
+            yield Step("cache", STEP_LABELS["cache"])
+            yield Done(hit)
+            return
         final: dict[str, Any] = {}
-        async for mode, chunk in self._graph.astream({"question": question.strip()}, stream_mode=["updates", "values"]):
+        async for mode, chunk in self._graph.astream({"question": question}, stream_mode=["updates", "values"]):
             if mode == "updates":
                 for node in chunk:
                     yield Step(node, STEP_LABELS.get(node, node))
             else:
                 final = chunk
-        yield Done(Answer.from_state(final))
+        answer = Answer.from_state(final)
+        if self._cache:
+            await asyncio.to_thread(self._cache.put, question, answer)
+        yield Done(answer)

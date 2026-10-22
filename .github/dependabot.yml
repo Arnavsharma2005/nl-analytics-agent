@@ -17,3 +17,7 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
+    ignore:
+      # Stay on Node LTS lines; odd-numbered majors are never LTS. Bump the LTS major by hand.
+      - dependency-name: node
+        update-types: [version-update:semver-major]
