@@ -1,7 +1,7 @@
 import hmac
 import json
 import logging
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,6 +20,7 @@ from app.answer_cache import AnswerCache
 from app.api_auth import auth_router, is_https, signed_in_user
 from app.api_curator import curator_router
 from app.api_datasets import datasets_router
+from app.api_mcp import mcp_route, mcp_server
 from app.api_shares import shares_router
 from app.api_v1 import v1_router
 from app.auth import GitHub, Users
@@ -178,9 +179,14 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                library_pr_factory=get_library_pr) -> FastAPI:
     settings = get_settings()
 
+    mcp = None  # the MCP server, made below once `spend` exists
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        yield
+        async with AsyncExitStack() as stack:
+            if mcp:
+                await stack.enter_async_context(mcp.session_manager.run())
+            yield
         if settings.uploads:
             dataset_analysts_factory().close()  # their DuckDB files live on the local disk
 
@@ -261,6 +267,11 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
     ))
     app.include_router(curator_router(curation=curation_factory, library_pr=library_pr_factory, identify=identify,
                                       login=login, curators=curators))
+
+    if settings.mcp:
+        mcp = mcp_server(analyst=analyst_factory, db=db_factory, library=semantic.load, spend=spend,
+                         client_ip=client_ip)
+        app.router.routes.append(mcp_route(mcp))
 
     @app.get("/api/config")
     def config():
