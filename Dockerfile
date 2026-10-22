@@ -1,5 +1,5 @@
 # Single image: builds the React app, then serves it and the API from FastAPI.
-FROM node:22-alpine AS web
+FROM node:25-alpine AS web
 WORKDIR /app/apps/web
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
