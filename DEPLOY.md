@@ -113,7 +113,7 @@ To change a key later, edit it under **Variables**. Railway redeploys automatica
    the web service and a free PostgreSQL database.
 3. Render asks for each API key. Paste the ones you have and leave the rest empty, then click **Apply**.
 4. The first start loads the sample data. When the deploy is live, open the `onrender.com` URL shown on the service
-   and check `/api/health` returns `{"status":"ok"}`.
+   and check `/readyz` returns `{"status":"ok"}`. Render's own health check uses `/healthz`, which skips the database.
 
 The free web service sleeps after 15 minutes without traffic, so the first request after that takes about a minute.
 Render deletes free databases 30 days after creation unless you upgrade.

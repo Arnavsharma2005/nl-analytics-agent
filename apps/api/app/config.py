@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,10 +33,18 @@ class Settings(BaseSettings):
     max_sql_attempts: int = 3
     max_result_rows: int = 500
     statement_timeout_ms: int = 10_000
+    # Queries whose planned cost (Postgres EXPLAIN units) is above this are sent back to the SQL agent instead of
+    # run. The costliest gold query is about 4,000; a missing join condition on order_items is about 12,000,000.
+    max_query_cost: float = 1_000_000
+    # Columns that hold personal data ("table.column"). They can filter and be counted but are never returned.
+    personal_data_columns: list[str] = ["customers.email"]
     # Rows shown to the chart and summary agents; the UI still gets every row.
     rows_for_llm: int = 50
 
     cors_origins: list[str] = ["http://localhost:5173"]
+
+    # Set by Render on every deploy; reported by /healthz so you can tell which build is live.
+    git_commit: str | None = Field(default=None, validation_alias=AliasChoices("GIT_COMMIT", "RENDER_GIT_COMMIT"))
 
     @field_validator("database_url")
     @classmethod

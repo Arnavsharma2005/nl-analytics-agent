@@ -1,20 +1,24 @@
 import json
+import logging
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sse_starlette.sse import EventSourceResponse
 from sqlalchemy import text
+from sse_starlette.sse import EventSourceResponse
 
+from app.analyst import Analyst, Answer, Done, Step
 from app.config import get_settings
 from app.db import Database
-from app.graph import build_graph, to_response
-from app.llm import AllProvidersFailed, FallbackLLM
+from app.llm import FallbackLLM
+from app.problems import Problem, from_exception, install
 from app.providers import build_llm
+
+log = logging.getLogger(__name__)
 
 EXAMPLES = [
     "What was our monthly revenue in 2025?",
@@ -27,19 +31,6 @@ EXAMPLES = [
     "Who are our top 5 customers by lifetime revenue?",
 ]
 
-STEP_LABELS = {
-    "router": "Understanding the question",
-    "sql_agent": "Writing SQL",
-    "validate": "Checking the query against the schema",
-    "execute": "Running the query",
-    "chart_agent": "Choosing a chart",
-    "summary_agent": "Writing the insight",
-    "schema_answer": "Describing the data",
-    "out_of_scope": "Done",
-    "give_up": "Stopped",
-}
-
-
 class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=500)
 
@@ -47,7 +38,7 @@ class AskRequest(BaseModel):
 @lru_cache
 def get_db() -> Database:
     s = get_settings()
-    return Database(s.database_url, s.statement_timeout_ms, s.max_result_rows)
+    return Database(s.database_url, s.statement_timeout_ms, s.max_result_rows, s.max_query_cost, s.personal_data_columns)
 
 
 @lru_cache
@@ -57,28 +48,34 @@ def get_llm() -> FallbackLLM:
 
 
 @lru_cache
-def get_graph():
+def get_analyst() -> Analyst:
     s = get_settings()
-    return build_graph(get_llm(), get_db(), s.max_sql_attempts, s.rows_for_llm)
+    return Analyst(get_llm(), get_db(), max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm)
 
 
-def create_app(graph_factory=get_graph, db_factory=get_db, llm_factory=get_llm) -> FastAPI:
+def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_llm) -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="NL Business Analytics Agent")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
+    install(app)
 
+    @app.get("/healthz")
+    def healthz():
+        """Liveness for uptime pings and the host's health check. Never touches the database, so a serverless
+        database can still suspend while the app is idle."""
+        return {"status": "ok", "commit": settings.git_commit}
+
+    @app.get("/readyz")
     @app.get("/api/health")
-    def health():
+    def readyz():
+        """Readiness: the database answers."""
         try:
             with db_factory().engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(503, f"database unavailable: {e}") from e
+        except Exception as e:  # noqa: BLE001 - the reason goes to the log, not to the caller
+            log.warning("readiness check failed: %s", e)
+            raise Problem(503, "database_unavailable", "The database is not reachable") from e
         return {"status": "ok"}
-
-    @app.exception_handler(AllProvidersFailed)
-    def all_failed(_, exc: AllProvidersFailed):
-        return JSONResponse(status_code=503, content={"detail": str(exc), "errors": exc.errors})
 
     @app.get("/api/providers")
     def providers():
@@ -97,26 +94,24 @@ def create_app(graph_factory=get_graph, db_factory=get_db, llm_factory=get_llm) 
         ]
 
     @app.post("/api/ask")
-    def ask(req: AskRequest):
-        state = graph_factory().invoke({"question": req.question.strip()})
-        return to_response(state)
+    def ask(req: AskRequest) -> Answer:
+        return analyst_factory().ask(req.question)
 
     @app.post("/api/ask/stream")
     async def ask_stream(req: AskRequest):
-        graph = graph_factory()
+        analyst = analyst_factory()
 
         async def events():
-            final = None
             try:
-                async for mode, chunk in graph.astream({"question": req.question.strip()}, stream_mode=["updates", "values"]):
-                    if mode == "updates":
-                        for node in chunk:
-                            yield {"event": "step", "data": json.dumps({"node": node, "label": STEP_LABELS.get(node, node)})}
-                    else:
-                        final = chunk
-                yield {"event": "result", "data": json.dumps(to_response(final or {}), default=str)}
+                async for event in analyst.stream(req.question):
+                    if isinstance(event, Step):
+                        yield {"event": "step", "data": json.dumps({"node": event.node, "label": event.label})}
+                    elif isinstance(event, Done):
+                        yield {"event": "result", "data": event.answer.model_dump_json()}
             except Exception as e:  # noqa: BLE001 - report to the client instead of dropping the stream
-                yield {"event": "error", "data": json.dumps({"error": str(e)})}
+                problem = from_exception(e).body()
+                # `error` is what the current web app reads; the rest is the same problem body as the JSON routes.
+                yield {"event": "error", "data": json.dumps({"error": problem.get("detail", problem["title"]), **problem})}
 
         return EventSourceResponse(events())
 

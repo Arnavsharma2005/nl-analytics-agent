@@ -87,6 +87,8 @@ Or run everything in containers: `docker compose up --build`, then open http://l
 
 ## API
 
+Errors are [problem details](docs/errors.md) with a stable `code` to branch on.
+
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/ask` | `{"question": "..."}` → chart spec, summary, SQL, rows, attempts, timings |
@@ -94,7 +96,8 @@ Or run everything in containers: `docker compose up --build`, then open http://l
 | `GET` | `/api/schema` | Tables and columns |
 | `GET` | `/api/providers` | Fallback chain: which providers are configured and which are cooling down |
 | `GET` | `/api/examples` | Example questions |
-| `GET` | `/api/health` | Liveness and database check |
+| `GET` | `/healthz` | Liveness for uptime pings and the host's health check; never touches the database |
+| `GET` | `/readyz` | Readiness: the database answers (`/api/health` is the same check) |
 
 ## Evaluation
 
@@ -110,7 +113,22 @@ python eval/run_eval.py --gold-only  # check every gold query runs (no LLM neede
 A prediction counts as correct when its result matches the gold result: same rows, values within rounding,
 column names and order ignored, extra columns allowed, and row order checked only for rankings and time
 series. The script prints accuracy by group, how many answers were rescued by the retry loop, and median
-latency, and saves `eval/results.json`.
+latency, and saves the run to `eval/results/<date>-<commit>.json`. Compare any two runs question by question:
+
+```bash
+python eval/compare.py eval/results/<before>.json eval/results/<after>.json
+```
+
+To check a code change without spending model calls, record one real run and replay it. Replay feeds the
+pipeline the same model answers, so any change in outcome comes from the code. CI does this on every pull
+request once `eval/baseline/` is committed, and fails if a question that passed now fails.
+
+```bash
+python eval/run_eval.py --record eval/baseline/cassette.json --out eval/baseline/results.json   # needs keys
+python eval/run_eval.py --replay eval/baseline/cassette.json                                    # no keys
+```
+
+If a change alters a prompt, replay reports a cassette miss for the questions it affects; record again.
 
 The results file also records which provider wrote each query. For a clean number per model, run with a
 single provider, e.g. `LLM_PROVIDERS=groq python eval/run_eval.py`.
@@ -123,6 +141,7 @@ single provider, e.g. `LLM_PROVIDERS=groq python eval/run_eval.py`.
 
 ```bash
 cd apps/api && python -m pytest
+ruff check .    # from the repo root
 ```
 
 Tests use scripted fake models against a real Postgres. They cover the SQL guard, the retry loop
@@ -138,27 +157,24 @@ Step-by-step instructions, including where to get each API key, are in [DEPLOY.m
 2. On the service, set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`, plus the API keys from `.env.example`.
 3. Deploy. The pre-deploy step seeds the database on first deploy and skips it afterwards.
 
-For a public demo, connect with a read-only role:
-
-```sql
-CREATE ROLE analytics_reader LOGIN PASSWORD '...';
-GRANT CONNECT ON DATABASE railway TO analytics_reader;
-GRANT USAGE ON SCHEMA public TO analytics_reader;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO analytics_reader;
-```
+For a public demo, connect as a read-only role. `apps/api/db/roles.sql` creates one (`analyst_ro`) that can only
+`SELECT` from `public`, with read-only transactions and a timeout enforced by the database. How the agent is kept
+safe is described in [SECURITY.md](SECURITY.md).
 
 ## Project layout
 
 ```
 apps/api/
+  app/analyst.py  Analyst.ask / Analyst.stream: the one entry point for answering a question, and the Answer model
   app/agents/     router, sql_agent, chart, summary
   app/graph.py    LangGraph wiring and the retry loop
   app/sql_guard.py, app/db.py   validation, introspection, read-only execution
   app/llm.py, app/providers.py  fallback chain across the 5 providers
+  app/replay.py   record model answers to a cassette and replay them
   app/main.py     FastAPI app (also serves the built frontend)
   app/seed.py     sample dataset
   tests/
 apps/web/         React + Vite + Recharts
-eval/             questions.yaml and run_eval.py
+eval/             questions.yaml, run_eval.py, compare.py, results/ (run history), baseline/ (replay cassette)
 PRD.md            product requirements
 ```
