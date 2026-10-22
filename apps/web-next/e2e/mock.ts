@@ -1,6 +1,6 @@
 /** A fake API for the browser tests: answers /v1 and /healthz from fixtures, and records what the page sent. */
 import type { Page, Route } from "@playwright/test";
-import type { Candidate, ConversationSummary, CuratorOverview, Dataset, Message, Share, StreamEvents, User } from "../src/api/types";
+import type { Candidate, ConversationSummary, CuratorOverview, Dataset, Insights, Message, Share, StreamEvents, User } from "../src/api/types";
 
 export const STARTERS = ["Revenue by region", "Monthly revenue trend in 2025", "Top 5 products by revenue"];
 
@@ -137,6 +137,8 @@ export interface Api {
   /** Shared answers by link id, and the message ids that were shared. */
   shares: Record<string, Share>;
   shared: string[];
+  /** The insights feed the nightly job left. */
+  insights: Insights;
 }
 
 export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise<Api> {
@@ -157,6 +159,7 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     refresh: (d) => ({ status: 200, body: { ...d, rows: d.rows + 10 } }),
     shares: {},
     shared: [],
+    insights: { week_start: null, generated_at: null, insights: [] },
     curator: null,
     reviews: [],
     exportPr: () => ({ status: 200, body: { url: "https://github.com/arnav/nl-analytics-agent/pull/31", count: 1 } }),
@@ -171,6 +174,7 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
   });
   await page.route("**/v1/config", (route) =>
     json(route, { turnstile_site_key: null, starters: STARTERS, features: { voice: false, explain: true, feedback: true, sign_in: true, uploads: true }, upload_max_mb: 5 }));
+  await page.route("**/v1/insights", (route) => json(route, api.insights));
   await page.route("**/v1/me", (route) => json(route, { user: api.user }));
   await page.route("**/v1/auth/logout", (route) => {
     api.user = null;

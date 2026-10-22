@@ -39,3 +39,5 @@ export interface Problem {
   detail?: string;
   retry_after?: number;
 }
+export type Insights = Schemas["InsightsV1"];
+export type Insight = Schemas["InsightV1"];

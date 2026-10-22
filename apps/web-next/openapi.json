@@ -952,6 +952,123 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "InsightV1": {
+        "description": "One notable move in the latest complete week.",
+        "properties": {
+          "dimension": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The dimension of the group that moved; none for the metric in total.",
+            "title": "Dimension"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "headline": {
+            "title": "Headline",
+            "type": "string"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "question": {
+            "description": "A question to ask next, to look into it.",
+            "title": "Question",
+            "type": "string"
+          },
+          "sql": {
+            "description": "The query the figures came from.",
+            "title": "Sql",
+            "type": "string"
+          },
+          "usual": {
+            "description": "Its median over the weeks before.",
+            "title": "Usual",
+            "type": "number"
+          },
+          "value": {
+            "description": "The metric that week.",
+            "title": "Value",
+            "type": "number"
+          },
+          "z": {
+            "description": "How unusual: distance from the usual week in typical spreads (robust z-score).",
+            "title": "Z",
+            "type": "number"
+          }
+        },
+        "required": [
+          "headline",
+          "metric",
+          "dimension",
+          "group",
+          "value",
+          "usual",
+          "z",
+          "sql",
+          "question"
+        ],
+        "title": "InsightV1",
+        "type": "object"
+      },
+      "InsightsV1": {
+        "properties": {
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "insights": {
+            "items": {
+              "$ref": "#/components/schemas/InsightV1"
+            },
+            "title": "Insights",
+            "type": "array"
+          },
+          "week_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Monday of the week the feed is about; none before the first run.",
+            "title": "Week Start"
+          }
+        },
+        "required": [
+          "week_start",
+          "generated_at",
+          "insights"
+        ],
+        "title": "InsightsV1",
+        "type": "object"
+      },
       "MeV1": {
         "properties": {
           "user": {
@@ -2038,6 +2155,28 @@
           }
         },
         "summary": "Refresh",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/insights": {
+      "get": {
+        "description": "The latest complete week's most notable moves in the data, found nightly (app/jobs/insights.py), each\nwith its figures, the query behind them and a question to look into it. Empty before the first run.",
+        "operationId": "insights_v1_insights_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightsV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Insights",
         "tags": [
           "v1"
         ]

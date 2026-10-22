@@ -7,6 +7,7 @@ import AnswerView from "./components/AnswerView";
 import Brand from "./components/Brand";
 import Composer from "./components/Composer";
 import { DatasetBar, SheetImport, UploadButton, YourUploads } from "./components/Datasets";
+import Insights from "./components/Insights";
 import Inspector from "./components/Inspector";
 import ServerStatus from "./components/ServerStatus";
 import { useConversation, type Turn } from "./conversation";
@@ -148,6 +149,7 @@ export default function App() {
                 questions={config.data?.starters ?? []}
                 onAsk={ask}
               >
+                <Insights onAsk={ask} />
                 {config.data?.upload_max_mb != null && (
                   <div className="mt-10">
                     <h3 className="font-semibold text-ink">Or ask about your own data</h3>

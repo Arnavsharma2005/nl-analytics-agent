@@ -464,6 +464,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Insights
+         * @description The latest complete week's most notable moves in the data, found nightly (app/jobs/insights.py), each
+         *     with its figures, the query behind them and a question to look into it. Empty before the first run.
+         */
+        get: operations["insights_v1_insights_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -1039,6 +1060,60 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * InsightV1
+         * @description One notable move in the latest complete week.
+         */
+        InsightV1: {
+            /**
+             * Dimension
+             * @description The dimension of the group that moved; none for the metric in total.
+             */
+            dimension: string | null;
+            /** Group */
+            group: string | null;
+            /** Headline */
+            headline: string;
+            /** Metric */
+            metric: string;
+            /**
+             * Question
+             * @description A question to ask next, to look into it.
+             */
+            question: string;
+            /**
+             * Sql
+             * @description The query the figures came from.
+             */
+            sql: string;
+            /**
+             * Usual
+             * @description Its median over the weeks before.
+             */
+            usual: number;
+            /**
+             * Value
+             * @description The metric that week.
+             */
+            value: number;
+            /**
+             * Z
+             * @description How unusual: distance from the usual week in typical spreads (robust z-score).
+             */
+            z: number;
+        };
+        /** InsightsV1 */
+        InsightsV1: {
+            /** Generated At */
+            generated_at: string | null;
+            /** Insights */
+            insights: components["schemas"]["InsightV1"][];
+            /**
+             * Week Start
+             * @description Monday of the week the feed is about; none before the first run.
+             */
+            week_start: string | null;
         };
         /** MeV1 */
         MeV1: {
@@ -1838,6 +1913,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    insights_v1_insights_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsV1"];
                 };
             };
         };
