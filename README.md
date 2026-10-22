@@ -224,6 +224,23 @@ Similar questions are found with the `bge-m3` embedding model on Cloudflare Work
 keys are set, and by shared words otherwise or when Cloudflare can't be reached. CI checks that the fast path
 never answers a held-out eval question.
 
+### Confidence
+
+Every answered data question carries `confidence.signals`: whether a verified query answered it, how close the
+nearest verified example was, how many queries it took and why the failed ones failed, whether the result was
+empty, how many readings of an ambiguous question it assumed, and how involved the SQL is. A small model trained on
+those signals (logistic regression with isotonic calibration, in plain Python) turns them into
+`confidence.probability` and a `high`, `medium` or `low` label:
+
+```bash
+python eval/run_eval.py                                 # a full run records each answer's signals
+python eval/train_confidence.py eval/results/<run>.json # learns from dev, reports AUROC on held-out
+```
+
+The model is written to `apps/api/models/confidence.json` and loaded on start. Until one is committed, answers carry
+signals and no label. The web app doesn't show the label yet: it runs in shadow mode until its calibration on
+live answers has been checked.
+
 ## Evaluation
 
 `eval/questions.yaml` holds 120 labelled questions in four groups (simple aggregates, joins, time-based,
@@ -235,6 +252,12 @@ hard). They are split in two:
   be written from these questions, and CI fails if a verified query returns the answer to one of them.
 
 The first 30 questions are the original v1 set; they are all in dev.
+
+The new web app's accuracy page at `/eval` publishes the results: the
+latest run over every held-out question, broken down by difficulty and kind, each question with the SQL it ran,
+and every earlier run. It is built only from runs committed to `eval/results/`, so every figure on it can be
+checked. After committing a run, `python eval/publish.py` updates the page's data; CI fails if it is out of date.
+Replays of a recorded run are left out, since they measure nothing new.
 
 ```bash
 python eval/run_eval.py              # runs all 120 through the full agent (uses the fallback chain)

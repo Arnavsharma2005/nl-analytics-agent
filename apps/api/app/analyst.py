@@ -16,6 +16,7 @@ from app.agents.chart import ChartSpec
 from app.agents.followup import Turn
 from app.analysis.drivers import Drivers
 from app.brief import Brief, database
+from app.confidence import Confidence, ConfidenceModel, assess
 from app.context import Context
 from app.db import DataSource
 from app.graph import build_graph
@@ -88,6 +89,9 @@ class Answer(BaseModel):
                                   "by each dimension in code (the rows are the drivers, biggest first). forecast: "
                                   "the history the SQL returned and, after it, the periods forecast in code with "
                                   "their 80% range (lower, upper).")
+    confidence: Confidence | None = Field(
+        default=None, description="How the answer was reached and, once a model is trained, how likely it is to be "
+                                  "right (app/confidence.py). Only for answered data questions.")
 
     def as_turn(self) -> Turn:
         """This answer as an earlier turn of its conversation, for reading the questions after it."""
@@ -95,7 +99,7 @@ class Answer(BaseModel):
                     summary=self.summary or self.answer)
 
     @classmethod
-    def from_state(cls, state: dict[str, Any]) -> "Answer":
+    def from_state(cls, state: dict[str, Any], confidence: ConfidenceModel | None = None) -> "Answer":
         data_query = state.get("intent") == "data_query"
         return cls(
             question=state.get("asked") or state.get("question", ""),
@@ -119,6 +123,7 @@ class Answer(BaseModel):
             assumptions=state.get("assumptions") or [],
             summary_verified=state.get("summary_verified"),
             analysis=state.get("analysis"),
+            confidence=assess(state, confidence),
         )
 
 
@@ -184,17 +189,19 @@ class Analyst:
     names, and a verified query can answer a question outright. `check_results` and `check_summaries` turn on
     the checks in app.checks. With `drivers` (app.analysis.drivers), questions about why a metric changed are
     answered by driver analysis, and with `forecasting` questions about the future are forecast from their
-    history. Each of these is off unless given.
+    history. Each of these is off unless given. A `confidence` model (app.confidence) scores each data answer;
+    without one, answers carry only the signals it would use.
     """
 
     def __init__(self, llm: LLM, source: DataSource, *, brief: Brief | None = None, max_attempts: int = 3,
                  rows_for_llm: int = 50, cache: Cache | None = None, context: Context | None = None,
                  check_results: bool = False, check_summaries: bool = False, drivers: Drivers | None = None,
-                 forecasting: bool = False):
+                 forecasting: bool = False, confidence: ConfidenceModel | None = None):
         self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm,
                                   brief=brief or database(), context=context, check_results=check_results,
                                   check_summaries=check_summaries, drivers=drivers, forecasting=forecasting)
         self._cache = cache
+        self._confidence = confidence
 
     def ask(self, question: str, history: list[Turn] | None = None) -> Answer:
         """Answer one question. `history` holds the earlier turns of its conversation, oldest first: a follow-up
@@ -202,7 +209,7 @@ class Analyst:
         question = question.strip()
         if self._cache and not history and (hit := self._cache.get(question)):
             return hit
-        answer = Answer.from_state(self._graph.invoke(self._input(question, history)))
+        answer = Answer.from_state(self._graph.invoke(self._input(question, history)), self._confidence)
         if self._cache:
             self._cache.put(*self._cache_entry(answer))
         return answer
@@ -252,7 +259,7 @@ class Analyst:
                     yield Token(chunk["summary"] or "", replace=True)
             else:
                 final = chunk
-        answer = Answer.from_state(final)
+        answer = Answer.from_state(final, self._confidence)
         if self._cache:
             await asyncio.to_thread(self._cache.put, *self._cache_entry(answer))
         yield Done(answer)
