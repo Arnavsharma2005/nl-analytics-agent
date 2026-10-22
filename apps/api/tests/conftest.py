@@ -16,23 +16,28 @@ class FakeLLM:
 
     `sql` is a list of queries returned on successive SQL-agent calls (the last one repeats)."""
 
-    def __init__(self, intent="data_query", sql=("SELECT 1 AS n",), chart=None, summary="Summary.", schema_answer="We have sales data."):
+    def __init__(self, intent="data_query", sql=("SELECT 1 AS n",), chart=None, summary="Summary.", schema_answer="We have sales data.",
+                 assumptions=()):
         self.intent = intent
         self.sql = list(sql)
         self.chart = chart
         self.summary = summary
         self.schema_answer = schema_answer
+        self.assumptions = list(assumptions)
+        self.systems: list[tuple[str, str]] = []
         self.calls: list[tuple[str, str]] = []
         self.tiers: list[tuple[str, str]] = []
 
     def structured(self, output: type[BaseModel], system: str, user: str, tier: str = "strong"):
         self.calls.append((output.__name__, user))
         self.tiers.append((output.__name__, tier))
+        self.systems.append((output.__name__, system))
         if output is RouteDecision:
             return RouteDecision(intent=self.intent, reason="test")
-        if output is SQLDraft:
-            n = sum(1 for name, _ in self.calls if name == "SQLDraft")
-            return SQLDraft(reasoning="test", sql=self.sql[min(n, len(self.sql)) - 1])
+        if issubclass(output, SQLDraft):
+            n = sum(1 for name, _ in self.calls if name.endswith("SQLDraft"))
+            extra = {"assumptions": self.assumptions} if output is not SQLDraft else {}
+            return output(reasoning="test", sql=self.sql[min(n, len(self.sql)) - 1], **extra)
         if output is ChartSpec:
             if self.chart is None:
                 raise RuntimeError("no chart scripted")
@@ -42,7 +47,13 @@ class FakeLLM:
     def text(self, system: str, user: str, tier: str = "strong") -> str:
         self.calls.append(("text", user))
         self.tiers.append(("text", tier))
-        return self.schema_answer if "help business users understand" in system else self.summary
+        if "help business users understand" in system:
+            return self.schema_answer
+        # A list of summaries is returned one per call (the last one repeats).
+        if isinstance(self.summary, list):
+            n = sum(1 for name, u in self.calls if name == "text" and u.startswith("Question:"))
+            return self.summary[min(n, len(self.summary)) - 1]
+        return self.summary
 
 
 @pytest.fixture(scope="session")

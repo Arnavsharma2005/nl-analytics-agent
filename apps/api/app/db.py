@@ -13,6 +13,9 @@ from sqlalchemy.engine import Engine
 # Text columns with at most this many distinct values get their values listed in the prompt,
 # so the model writes status = 'completed' rather than guessing 'Complete'.
 ENUM_LIKE_MAX_DISTINCT = 12
+# Text columns with at most this many distinct values keep them all, so a name in a question ("Pro Laptops") can
+# be matched to the value stored in the data ('Pro Laptop').
+LOOKUP_MAX_DISTINCT = 5000
 
 
 @dataclass
@@ -20,7 +23,8 @@ class Column:
     name: str
     type: str
     comment: str | None = None
-    values: list[str] | None = None
+    values: list[str] | None = None  # listed in the prompt (enum-like columns only)
+    distinct_values: list[str] | None = None  # every value, for text columns with few enough of them
     personal: bool = False  # personal data: usable in filters and counts, never returned (see sql_guard)
 
 
@@ -159,10 +163,13 @@ class Database:
                     if c.type not in ("text", "character varying") or c.personal:
                         continue
                     values = conn.execute(text(
-                        f'SELECT DISTINCT "{c.name}" FROM "{t.name}" ORDER BY 1 LIMIT {ENUM_LIKE_MAX_DISTINCT + 1}'
+                        f'SELECT DISTINCT "{c.name}" FROM "{t.name}" WHERE "{c.name}" IS NOT NULL '
+                        f'ORDER BY 1 LIMIT {LOOKUP_MAX_DISTINCT + 1}'
                     )).scalars().all()
+                    if len(values) <= LOOKUP_MAX_DISTINCT:
+                        c.distinct_values = list(values)
                     if len(values) <= ENUM_LIKE_MAX_DISTINCT:
-                        c.values = [v for v in values if v is not None]
+                        c.values = list(values)
         return Schema(tables)
 
     def _read_only(self, conn) -> None:

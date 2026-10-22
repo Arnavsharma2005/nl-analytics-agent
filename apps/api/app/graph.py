@@ -1,4 +1,9 @@
-"""The LangGraph pipeline: router -> SQL (with validate/repair loop) -> execute -> chart -> summary."""
+"""The LangGraph pipeline: router -> [context] -> SQL (with validate/repair loop) -> execute -> chart -> summary.
+
+With a `Context`, data questions first collect their context (verified examples, values they name); a question
+a verified query answers outright skips the SQL agent. `check_results` sends a query that finds nothing back to the
+SQL agent once, and `check_summaries` has a summary rewritten once if it quotes figures the result lacks.
+"""
 
 import operator
 import time
@@ -11,6 +16,8 @@ from app.agents.chart import choose_chart
 from app.agents.router import answer_schema_question, route
 from app.agents.sql_agent import write_sql
 from app.agents.summary import summarize
+from app.checks import EMPTY_RESULT, looks_empty, unsupported_numbers
+from app.context import Context, ContextPack
 from app.db import DataSource, QueryError
 from app.llm import LLM, AllProvidersFailed, CallLogging
 from app.privacy import mask_rows
@@ -38,6 +45,11 @@ class AnalyticsState(TypedDict, total=False):
     sql_ok: bool
     sql_attempts: int
     failures: list[dict[str, str]]  # earlier attempts: {"sql", "error", "stage"}
+    context: ContextPack
+    verified_question: str  # the verified query used instead of the SQL agent
+    assumptions: list[str]
+    result_checked: bool
+    summary_verified: bool
     columns: list[str]
     rows: list[list[Any]]
     truncated: bool
@@ -69,7 +81,8 @@ def _timed(name: str, llm: LLM | None = None):
     return deco
 
 
-def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: int = 50):
+def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: int = 50, *,
+                context: Context | None = None, check_results: bool = False, check_summaries: bool = False):
     schema = db.schema()
     schema_text = schema.describe()
     table_names = sorted(schema.tables)
@@ -90,11 +103,22 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     def out_of_scope_node(state: AnalyticsState):
         return {"answer": OUT_OF_SCOPE_REPLY}
 
+    @timed("context")
+    def context_node(state: AnalyticsState):
+        return {"context": context.pack(state["question"])}
+
+    def verified_node(state: AnalyticsState):
+        query = state["context"].verified
+        return {"sql": query.sql, "verified_question": query.question,
+                "sql_reasoning": f"A verified query answers this question: \"{query.question}\""}
+
     @timed("sql_agent")
     def write_sql_node(state: AnalyticsState):
         previous = [(f["sql"], f["error"]) for f in state.get("failures", [])]
-        draft = write_sql(llm, state["question"], schema_text, previous)
-        return {"sql": draft.sql, "sql_reasoning": draft.reasoning, "sql_attempts": state.get("sql_attempts", 0) + 1}
+        pack = state.get("context")
+        draft = write_sql(llm, state["question"], schema_text, previous, pack.prompt_text() if pack else None)
+        return {"sql": draft.sql, "sql_reasoning": draft.reasoning, "sql_attempts": state.get("sql_attempts", 0) + 1,
+                "assumptions": getattr(draft, "assumptions", []), "verified_question": None}
 
     @timed("validate")
     def validate_node(state: AnalyticsState):
@@ -113,6 +137,11 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
         except QueryError as e:
             failure = {"sql": state["sql"], "error": str(e), "stage": "execute"}
             return {"sql_ok": False, "failures": state.get("failures", []) + [failure]}
+        failures = state.get("failures", [])
+        if (check_results and looks_empty(result.rows) and not state.get("result_checked")
+                and not state.get("verified_question") and len(failures) < max_attempts):
+            failure = {"sql": state["sql"], "error": EMPTY_RESULT, "stage": "result"}
+            return {"sql_ok": False, "failures": failures + [failure], "result_checked": True}
         # Masked here, before the rows reach the chart and summary models, the response or any log.
         return {"columns": result.columns, "rows": mask_rows(result.rows), "truncated": result.truncated}
 
@@ -123,20 +152,36 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
 
     @timed("summary_agent")
     def summary_node(state: AnalyticsState):
-        rows = state["rows"]
+        rows, shown = state["rows"], state["rows"][:rows_for_llm]
+
+        def write(unsupported=None):
+            return summarize(llm, state["question"], state["columns"], shown, len(rows), state.get("truncated", False),
+                             unsupported)
+
         try:
-            text = summarize(llm, state["question"], state["columns"], rows[:rows_for_llm], len(rows), state.get("truncated", False))
+            text = write()
         except AllProvidersFailed:
             # The chart and rows are still worth returning when no model is left to write the summary.
-            text = None
-        return {"summary": text}
+            return {"summary": None}
+        if not check_summaries:
+            return {"summary": text}
+        if unsupported := unsupported_numbers(text, shown, len(rows)):
+            try:
+                text = write(unsupported)
+            except AllProvidersFailed:
+                pass  # keep the first draft; summary_verified says it failed the check
+        return {"summary": text, "summary_verified": not unsupported_numbers(text, shown, len(rows))}
 
     def give_up_node(state: AnalyticsState):
         last = state["failures"][-1]["error"] if state.get("failures") else "unknown error"
         return {"error": f"I couldn't build a working query after {max_attempts} attempts. Last error: {last}"}
 
     def after_router(state: AnalyticsState):
-        return {"data_query": "sql_agent", "schema_question": "schema_answer"}.get(state["intent"], "out_of_scope")
+        first = "context" if context else "sql_agent"
+        return {"data_query": first, "schema_question": "schema_answer"}.get(state["intent"], "out_of_scope")
+
+    def after_context(state: AnalyticsState):
+        return "verified" if state["context"].verified else "sql_agent"
 
     def after_check(next_node: str):
         def decide(state: AnalyticsState):
@@ -158,7 +203,14 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
     g.add_node("give_up", give_up_node)
 
     g.add_edge(START, "router")
-    g.add_conditional_edges("router", after_router, ["sql_agent", "schema_answer", "out_of_scope"])
+    if context:
+        g.add_node("context", context_node)
+        g.add_node("verified", verified_node)
+        g.add_conditional_edges("router", after_router, ["context", "schema_answer", "out_of_scope"])
+        g.add_conditional_edges("context", after_context, ["verified", "sql_agent"])
+        g.add_edge("verified", "validate")
+    else:
+        g.add_conditional_edges("router", after_router, ["sql_agent", "schema_answer", "out_of_scope"])
     g.add_edge("sql_agent", "validate")
     g.add_conditional_edges("validate", after_check("execute"), ["execute", "sql_agent", "give_up"])
     g.add_conditional_edges("execute", after_check("chart_agent"), ["chart_agent", "sql_agent", "give_up"])

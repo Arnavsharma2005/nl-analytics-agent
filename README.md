@@ -120,6 +120,22 @@ any other change:
 
 Changing a rule changes the SQL agent's prompt, so record the eval cassette again (below).
 
+### Context and checks
+
+Four switches, each off by default. Each is turned on only when the held-out eval score holds up with it
+(`CONTEXT_RETRIEVAL=true python eval/run_eval.py --split test`, compared with a run without it).
+
+| Setting | What it does |
+| --- | --- |
+| `CONTEXT_RETRIEVAL` | Shows the SQL agent the three verified queries most like the question, and the data values the question names, even misspelt ("Pro Laptops" → `'Pro Laptop'`). The agent also states how it read an ambiguous question; these come back as `assumptions`. |
+| `VERIFIED_FAST_PATH` | Answers a question with a verified query outright when it asks the same thing in other words. Every detail that changes the answer must agree: numbers and years, top or bottom, the measure (count, share, average), the business terms, the breakdown and the values named. The answer says which verified question it used (`verified_question`). Needs `CONTEXT_RETRIEVAL`. |
+| `CHECK_RESULTS` | Sends a query that finds nothing back to the SQL agent once. If it still finds nothing, that is the answer. |
+| `CHECK_SUMMARIES` | Checks every figure in the summary against the result, allowing for rounding, ₹ L/Cr units, and simple sums, differences, ratios and shares. A summary that fails is rewritten once, and `summary_verified` says whether the final one passed. |
+
+Similar questions are found with the `bge-m3` embedding model on Cloudflare Workers AI when the `CLOUDFLARE_*`
+keys are set, and by shared words otherwise or when Cloudflare can't be reached. CI checks that the fast path
+never answers a held-out eval question.
+
 ## Evaluation
 
 `eval/questions.yaml` holds 120 labelled questions in four groups (simple aggregates, joins, time-based,
@@ -213,6 +229,8 @@ apps/api/
   app/analyst.py  Analyst.ask / Analyst.stream: the one entry point for answering a question, and the Answer model
   app/agents/     router, sql_agent, chart, summary
   app/semantic.py, semantic/   business rules (metrics.yml) and verified queries (queries.yml)
+  app/context/    similar verified queries, named values and the verified fast path
+  app/checks.py   empty-result and summary-figure checks
   app/graph.py    LangGraph wiring and the retry loop
   app/sql_guard.py, app/db.py   validation, introspection, read-only execution
   app/llm.py, app/providers.py  fallback chain across the 5 providers

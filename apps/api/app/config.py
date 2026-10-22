@@ -73,6 +73,21 @@ class Settings(BaseSettings):
     # Repeated questions are answered from a cache for this long. 0 turns the cache off.
     answer_cache_ttl_s: int = 24 * 3600
 
+    # --- Context and checks (see README). Each is off by default and is turned on only when the held-out eval
+    # score holds up with it. ---------------------------------------------------------------------------------
+    # Show the SQL agent verified queries for similar questions and the data values a question names, and have it
+    # state the readings it chose.
+    context_retrieval: bool = False
+    # Answer a question with a verified query outright when it asks the same thing (needs CONTEXT_RETRIEVAL).
+    verified_fast_path: bool = False
+    # Send a query that finds nothing back to the SQL agent once.
+    check_results: bool = False
+    # Have a summary rewritten once if it quotes figures that are not in the result.
+    check_summaries: bool = False
+    # Embedding model for finding similar questions, on Cloudflare Workers AI (uses the CLOUDFLARE_* keys). Without
+    # those keys, or with this empty, questions are compared by the words they share.
+    embedding_model: str | None = "@cf/baai/bge-m3"
+
     # Set by Render on every deploy; reported by /healthz so you can tell which build is live.
     git_commit: str | None = Field(default=None, validation_alias=AliasChoices("GIT_COMMIT", "RENDER_GIT_COMMIT"))
 

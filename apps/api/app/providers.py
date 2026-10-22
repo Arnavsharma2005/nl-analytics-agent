@@ -7,6 +7,7 @@ model with <NAME>_MODEL (e.g. GROQ_MODEL=qwen/qwen3.6-27b). Providers without a 
 from collections.abc import Callable
 
 from app.config import Settings
+from app.context import Embedder, OpenAIEmbedder
 from app.llm import FallbackLLM, Provider
 
 # name: (display name, base url, default model)
@@ -49,3 +50,12 @@ def build_providers(s: Settings) -> list[Provider]:
 
 def build_llm(s: Settings, budget: Callable[[str], bool] | None = None) -> FallbackLLM:
     return FallbackLLM(build_providers(s), timeout=s.llm_timeout_s, budget=budget)
+
+
+def build_embedder(s: Settings) -> Embedder | None:
+    """The embedding model for finding similar questions: Cloudflare Workers AI when its keys are set, else None
+    (similar questions are then found by shared words)."""
+    if not (s.embedding_model and s.cloudflare_api_token and s.cloudflare_account_id):
+        return None
+    base_url = CATALOG["cloudflare"][1].format(account_id=s.cloudflare_account_id)
+    return OpenAIEmbedder(base_url, s.cloudflare_api_token, s.embedding_model, timeout_s=s.llm_timeout_s)
