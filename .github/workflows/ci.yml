@@ -69,6 +69,9 @@ jobs:
   web-next:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Playwright's image has Chromium and its system libraries already, so nothing comes from the runner's apt
+    # mirror (which hung twice installing them). Keep its tag equal to @playwright/test in package.json.
+    container: mcr.microsoft.com/playwright:v1.64.0-noble
     defaults:
       run:
         working-directory: apps/web-next
@@ -85,9 +88,6 @@ jobs:
       - name: Types generated from the OpenAPI spec are up to date
         run: npm run gen:api && git diff --exit-code src/api/schema.d.ts
       - run: npm run build
-      # The runner's apt mirror sometimes hangs; stop and fail instead of waiting out the job.
-      - run: npx playwright install --with-deps chromium
-        timeout-minutes: 8
       - name: Browser tests (mocked API) with accessibility checks
         run: npx playwright test
       - uses: actions/upload-artifact@v7
