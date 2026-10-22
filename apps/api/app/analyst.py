@@ -13,12 +13,15 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, Field
 
 from app.agents.chart import ChartSpec
+from app.context import Context
 from app.db import DataSource
 from app.graph import build_graph
 from app.llm import LLM
 
 STEP_LABELS = {
     "router": "Understanding the question",
+    "context": "Looking up similar questions",
+    "verified": "Using a verified query",
     "sql_agent": "Writing SQL",
     "validate": "Checking the query against the schema",
     "execute": "Running the query",
@@ -32,11 +35,11 @@ STEP_LABELS = {
 
 
 class Failure(BaseModel):
-    """An attempt that failed validation or execution and was fed back to the SQL agent."""
+    """An attempt that failed validation or execution, or found nothing, and was fed back to the SQL agent."""
 
     sql: str
     error: str
-    stage: Literal["validate", "execute"]
+    stage: Literal["validate", "execute", "result"]
 
 
 class Answer(BaseModel):
@@ -59,6 +62,12 @@ class Answer(BaseModel):
     timings: dict[str, float] = Field(default_factory=dict)
     llm_calls: list[dict[str, Any]] = Field(default_factory=list)
     cached: bool = Field(default=False, description="Served from the answer cache, without running the pipeline.")
+    verified_question: str | None = Field(
+        default=None, description="Answered with the verified query for this question instead of writing new SQL.")
+    assumptions: list[str] = Field(
+        default_factory=list, description="How an ambiguous question was read, in plain words.")
+    summary_verified: bool | None = Field(
+        default=None, description="Whether every figure in the summary was found in the result (None: not checked).")
 
     @classmethod
     def from_state(cls, state: dict[str, Any]) -> "Answer":
@@ -80,6 +89,9 @@ class Answer(BaseModel):
             failures=state.get("failures", []),
             timings=state.get("timings", {}),
             llm_calls=state.get("llm_calls", []),
+            verified_question=state.get("verified_question") if data_query else None,
+            assumptions=state.get("assumptions") or [],
+            summary_verified=state.get("summary_verified"),
         )
 
 
@@ -115,12 +127,16 @@ class Analyst:
     later in the pipeline are reported inside the Answer instead.
 
     With a `cache`, a question asked before is answered from it (marked `cached`), and complete new answers are
-    added to it.
+    added to it. With a `context` (app.context), the SQL agent sees verified examples and the values a question
+    names, and a verified query can answer a question outright. `check_results` and `check_summaries` turn on
+    the checks in app.checks. Each of these is off unless given.
     """
 
     def __init__(self, llm: LLM, source: DataSource, *, max_attempts: int = 3, rows_for_llm: int = 50,
-                 cache: Cache | None = None):
-        self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm)
+                 cache: Cache | None = None, context: Context | None = None, check_results: bool = False,
+                 check_summaries: bool = False):
+        self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm,
+                                  context=context, check_results=check_results, check_summaries=check_summaries)
         self._cache = cache
 
     def ask(self, question: str) -> Answer:

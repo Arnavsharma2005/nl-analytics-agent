@@ -26,11 +26,31 @@ class SQLDraft(BaseModel):
     sql: str = Field(description="The PostgreSQL SELECT query, with no markdown fences.")
 
 
-def write_sql(llm: LLM, question: str, schema_text: str, previous: list[tuple[str, str]]) -> SQLDraft:
-    """`previous` holds (sql, error) for earlier attempts that failed validation or execution."""
+# With context retrieval on, the prompt also carries question-specific context (verified examples, values the
+# question names) and the model states the readings it chose. Off, the prompt is exactly as before.
+CONTEXT_STYLE = "\n- If the question can be read more than one way, choose the most likely reading and state it in assumptions."
+
+
+class ContextualSQLDraft(SQLDraft):
+    assumptions: list[str] = Field(
+        default_factory=list,
+        description="Readings you chose where the question was ambiguous, in plain words for a business user, "
+                    "e.g. \"2025 means calendar year 2025\". Empty when there were none.",
+    )
+
+
+def write_sql(llm: LLM, question: str, schema_text: str, previous: list[tuple[str, str]],
+              context: str | None = None) -> SQLDraft:
+    """`previous` holds (sql, error) for earlier attempts that failed validation or execution. `context`, when
+    given (even empty), is the question's context from app.context and asks for a `ContextualSQLDraft`."""
+    system = SYSTEM.format(schema=schema_text, rules=semantic.load().rules_text())
     user = f"Question: {question}"
+    if context:
+        user += f"\n\n{context}"
     if previous:
         user += "\n\nYour earlier attempts failed. Fix the problem and return a corrected query."
         for i, (sql, error) in enumerate(previous, 1):
             user += f"\n\nAttempt {i}:\n{sql}\nError: {error}"
-    return llm.structured(SQLDraft, SYSTEM.format(schema=schema_text, rules=semantic.load().rules_text()), user)
+    if context is None:
+        return llm.structured(SQLDraft, system, user)
+    return llm.structured(ContextualSQLDraft, system + CONTEXT_STYLE, user)

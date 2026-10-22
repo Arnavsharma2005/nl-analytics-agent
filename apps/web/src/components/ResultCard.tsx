@@ -23,6 +23,7 @@ const LABELS: Record<string, string> = {
 
 function Progress({ steps }: { steps: Step[] }) {
   const done = new Set(steps.map((s) => s.node));
+  if (done.has("verified")) done.add("sql_agent"); // a verified query stands in for writing SQL
   const retries = steps.filter((s) => s.node === "sql_agent").length - 1;
   const current = PIPELINE.find((n) => !done.has(n));
   return (
@@ -68,6 +69,9 @@ export default function ResultCard({ entry }: { entry: Entry }) {
       {r && r.intent === "data_query" && !r.error && (
         <>
           {r.summary && <p className="summary">{r.summary}</p>}
+          {r.assumptions && r.assumptions.length > 0 && (
+            <p className="muted small">Read as: {r.assumptions.join("; ")}</p>
+          )}
           {r.chart && <ChartView spec={r.chart} columns={r.columns} rows={r.rows} />}
           <div className="meta">
             <button className={tab === "sql" ? "on" : ""} onClick={() => setTab(tab === "sql" ? "none" : "sql")}>SQL</button>
@@ -77,6 +81,7 @@ export default function ResultCard({ entry }: { entry: Entry }) {
             <span className="muted">
               {modelNote(r.llm_calls ?? [])}
               {r.llm_calls?.some((c) => c.ok) ? " · " : ""}
+              {r.verified_question ? "From a verified query · " : ""}
               {r.attempts > 1 ? `Fixed its own SQL after ${r.attempts - 1} failed attempt${r.attempts > 2 ? "s" : ""} · ` : ""}
               {Object.values(r.timings).reduce((a, b) => a + b, 0).toFixed(1)}s
             </span>

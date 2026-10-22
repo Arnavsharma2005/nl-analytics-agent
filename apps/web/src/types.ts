@@ -26,6 +26,9 @@ export interface AskResult {
   attempts: number;
   timings: Record<string, number>;
   llm_calls: LLMCall[];
+  verified_question?: string | null;
+  assumptions?: string[];
+  summary_verified?: boolean | null;
 }
 
 export interface LLMCall {

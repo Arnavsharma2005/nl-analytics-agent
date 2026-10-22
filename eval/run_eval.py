@@ -9,6 +9,10 @@ Usage (from the repo root, with DATABASE_URL and an LLM key set):
 
 Each run is written to eval/results/<date>-<commit>.json (or --out); compare two runs with eval/compare.py.
 
+Features that are off by default are measured by turning them on in the environment, e.g.
+    CONTEXT_RETRIEVAL=true VERIFIED_FAST_PATH=true python eval/run_eval.py --split test
+The replay baseline covers the default configuration only: embeddings are not recorded.
+
 Replay baseline: record one real run, commit both files, and CI re-runs the pipeline from the saved model answers
 on every pull request, failing if any question that passed now fails:
     python eval/run_eval.py --record eval/baseline/cassette.json --out eval/baseline/results.json
@@ -76,8 +80,10 @@ def main() -> int:
                 print(f"#{q['id']:>2} FAIL {e}")
         return 1 if bad else 0
 
+    from app import semantic
     from app.analyst import Analyst
-    from app.providers import build_llm
+    from app.context import Context
+    from app.providers import build_embedder, build_llm
     from app.replay import RecordingLLM, ReplayLLM
 
     if args.replay:
@@ -86,7 +92,12 @@ def main() -> int:
         real = build_llm(settings)
         providers = [p["label"] for p in real.status() if p["configured"]]
         llm = RecordingLLM(real) if args.record else real
-    analyst = Analyst(llm, db, max_attempts=settings.max_sql_attempts, rows_for_llm=settings.rows_for_llm)
+    context = (Context(semantic.load(), db.schema(), build_embedder(settings), fast_path=settings.verified_fast_path)
+               if settings.context_retrieval else None)
+    features = {"context_retrieval": bool(context), "verified_fast_path": bool(context) and settings.verified_fast_path,
+                "check_results": settings.check_results, "check_summaries": settings.check_summaries}
+    analyst = Analyst(llm, db, max_attempts=settings.max_sql_attempts, rows_for_llm=settings.rows_for_llm,
+                      context=context, check_results=settings.check_results, check_summaries=settings.check_summaries)
 
     results = []
     for i, q in enumerate(questions):
@@ -107,6 +118,7 @@ def main() -> int:
             "question": q["question"], "correct": correct,
             "intent": answer.intent if answer else None, "sql": answer.sql if answer else None,
             "attempts": answer.attempts if answer else 0, "latency_s": round(latency, 2), "error": error,
+            "verified": bool(answer and answer.verified_question),
             "gold_rows": len(gold), "pred_rows": None if pred is None else len(pred),
             # The provider that wrote the final SQL (fallbacks can mix models within one run).
             "sql_provider": next((c["provider"] for c in reversed(answer.llm_calls if answer else [])
@@ -131,6 +143,7 @@ def main() -> int:
     commit = git_commit()
     summary = {
         "providers_configured": providers,
+        "features": [name for name, on in features.items() if on],
         "sql_written_by": dict(Counter(r["sql_provider"] for r in results if r["sql_provider"])),
         "run_at": run_at.isoformat(timespec="seconds"),
         "commit": commit,
@@ -141,6 +154,7 @@ def main() -> int:
         "by_difficulty": tally("difficulty"),
         "by_category": tally("category"),
         "repaired_by_retry": sum(1 for r in results if r["correct"] and r["attempts"] > 1),
+        "answered_by_verified_query": sum(r["verified"] for r in results),
         "median_latency_s": round(statistics.median(r["latency_s"] for r in results), 2) if results else None,
     }
     out = Path(args.out) if args.out else ROOT / "eval" / "results" / f"{run_at:%Y-%m-%d-%H%M}-{commit}.json"
