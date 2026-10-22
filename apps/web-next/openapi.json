@@ -501,12 +501,25 @@
               }
             ],
             "title": "Turnstile Site Key"
+          },
+          "upload_max_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The largest CSV file that can be uploaded; null when uploads are off.",
+            "title": "Upload Max Mb"
           }
         },
         "required": [
           "turnstile_site_key",
           "starters",
-          "features"
+          "features",
+          "upload_max_mb"
         ],
         "title": "ConfigV1",
         "type": "object"
@@ -1362,7 +1375,7 @@
     },
     "/v1/datasets": {
       "get": {
-        "description": "Your uploaded files that haven't expired, newest first.",
+        "description": "Your uploaded files that haven't expired, newest first (none before you have a session).",
         "operationId": "list_datasets_v1_datasets_get",
         "responses": {
           "200": {

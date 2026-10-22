@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.agents.chart import ChartSpec
 from app.analyst import Analyst
+from app.config import get_settings
 from app.datasets.csv_upload import Limits, UploadRejected, identifier, read_csv
 from app.datasets.duck import DuckDBSource
 from app.datasets.profile import personal_reason
@@ -257,8 +258,10 @@ def test_a_deleted_dataset_answers_no_more_questions_but_keeps_its_answers(make)
 
 
 def test_uploads_need_a_session_and_a_readable_file(make):
-    r = upload(make(session=False))
+    newcomer = make(session=False)
+    r = upload(newcomer)
     assert r.status_code == 403 and r.json()["code"] == "session_required"
+    assert newcomer.get("/v1/datasets").json() == []
     r = upload(make(), data=b"PK\x03\x04", name="book.xlsx")
     assert r.status_code == 422 and r.json()["code"] == "not_csv" and "CSV" in r.json()["detail"]
 
@@ -272,3 +275,28 @@ def test_the_answer_never_shows_the_personal_column(make, sql):
     answer = ask(client, dataset["id"]).json()["answer"]
     assert answer["error"] and not answer["rows"]
     assert "asha@" not in str(answer)
+
+
+def test_a_follow_up_only_counts_earlier_questions_about_the_same_data(make):
+    client = make()
+    dataset = upload(client).json()
+    conversation = uuid.uuid4()
+    demo = client.post(f"/v1/conversations/{conversation}/messages", json={"question": "Revenue by region"},
+                       headers={"Idempotency-Key": str(uuid.uuid4())})
+    assert demo.status_code == 200
+    ask(client, dataset["id"], conversation=conversation)
+    assert not [name for name, _ in make.llm.calls if name == "Standalone"]  # asked on its own, not as a follow-up
+    ask(client, dataset["id"], "and in Delhi?", conversation=conversation)
+    assert [name for name, _ in make.llm.calls if name == "Standalone"] == ["Standalone"]
+
+
+def test_with_uploads_off_a_dataset_id_is_not_found(make, monkeypatch):
+    client = make()
+    dataset = upload(client).json()
+    monkeypatch.setattr(get_settings(), "uploads", False)
+    same_visitor = make(session=False)
+    same_visitor.cookies = client.cookies
+    assert same_visitor.get("/v1/config").json()["upload_max_mb"] is None
+    r = ask(same_visitor, dataset["id"])
+    assert r.status_code == 404 and r.json()["code"] == "dataset_not_found"
+    assert ask(client, dataset["id"]).status_code == 200  # the owner's own file, with uploads on

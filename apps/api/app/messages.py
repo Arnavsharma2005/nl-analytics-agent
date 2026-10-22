@@ -99,17 +99,21 @@ class Messages:
                 return "new", None
             return "running", None
 
-    def history(self, conversation_id: UUID, owner: str | None, before: UUID, limit: int = 3) -> list[Turn]:
+    def history(self, conversation_id: UUID, owner: str | None, before: UUID, limit: int = 3,
+                dataset_id: UUID | None = None) -> list[Turn]:
         """The last answered turns of a conversation asked before message `before`, oldest first, each as it was
-        understood. Only the owner's own messages count, so a guessed conversation id reveals nothing."""
+        understood. Only the owner's own messages count, so a guessed conversation id reveals nothing, and only
+        those about the same data (`dataset_id`, or the demo's when None), since SQL about other tables would
+        mislead a follow-up."""
         with self._engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT answer FROM app.messages
                 WHERE conversation_id = :conversation AND owner IS NOT DISTINCT FROM :owner
-                  AND answer IS NOT NULL AND id <> :before
+                  AND dataset_id IS NOT DISTINCT FROM :dataset AND answer IS NOT NULL AND id <> :before
                   AND created_at <= (SELECT coalesce(max(created_at), now()) FROM app.messages WHERE id = :before)
                 ORDER BY created_at DESC LIMIT :limit
-            """), {"conversation": conversation_id, "owner": owner, "before": before, "limit": limit}).all()
+            """), {"conversation": conversation_id, "owner": owner, "before": before, "limit": limit,
+                                    "dataset": dataset_id}).all()
         return [Answer.model_validate(row.answer["answer"]).as_turn() for row in reversed(rows)]
 
     def finish(self, id: UUID, answer: Answer, suggestions: list[str]) -> MessageV1 | None:

@@ -58,6 +58,7 @@ class ConfigV1(BaseModel):
     turnstile_site_key: str | None
     starters: list[str]
     features: dict[str, bool]
+    upload_max_mb: int | None = Field(description="The largest CSV file that can be uploaded; null when uploads are off.")
 
 
 def _sse(event: str, data) -> dict:
@@ -80,7 +81,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
               suggester: Callable[[], Context], transcriber: Callable[[], Transcriber | None],
               identify: Callable[[Request], Visitor], spend: Callable[[Visitor], None],
               turnstile_site_key: Callable[[], str | None], starters: Callable[[], list[str]],
-              sign_in: Callable[[], bool], datasets: Callable[[], DatasetAnalysts], uploads: bool) -> APIRouter:
+              sign_in: Callable[[], bool], datasets: Callable[[], DatasetAnalysts], upload_max_mb: int | None) -> APIRouter:
     """`identify` names the visitor (raising if the bot check is missing); `spend` counts one question against
     their quota (raising when it is used up)."""
     router = APIRouter(prefix="/v1", tags=["v1"])
@@ -106,7 +107,8 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         """What the web app needs at start-up."""
         return ConfigV1(turnstile_site_key=turnstile_site_key(), starters=starters(),
                         features={"voice": transcriber() is not None, "explain": True, "feedback": True,
-                                  "sign_in": sign_in(), "uploads": uploads})
+                                  "sign_in": sign_in(), "uploads": upload_max_mb is not None},
+                        upload_max_mb=upload_max_mb)
 
     @router.post("/conversations/{conversation_id}/messages", response_model=MessageV1,
                  responses={200: {"content": {"text/event-stream": {}}}})
@@ -136,12 +138,14 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         if state == "new":
             try:
                 if body.dataset_id:
-                    found = await asyncio.to_thread(datasets().get, body.dataset_id, visitor.owner)
+                    found = None
+                    if upload_max_mb is not None:  # with uploads off, no file is there to ask about
+                        found = await asyncio.to_thread(datasets().get, body.dataset_id, visitor.owner)
                     if found is None:
                         raise Problem(404, *GONE)
                     dataset, chosen = found
                 spend(visitor)
-            except Problem:
+            except Exception:  # a refusal, or the upload failed to open: free the key for a retry
                 if store_ok:
                     await store(messages().abandon, message_id)
                 raise
@@ -149,7 +153,8 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         # Earlier turns let a follow-up ("and last year?") be understood; without them it is asked on its own.
         history = []
         if state == "new" and store_ok:
-            history = await store(messages().history, conversation_id, visitor.owner, message_id) or []
+            history = await store(messages().history, conversation_id, visitor.owner, message_id, 3,
+                                  body.dataset_id) or []
 
         async def finish(answer: Answer) -> MessageV1:
             follow_ups = await asyncio.to_thread(suggestions, answer, dataset)

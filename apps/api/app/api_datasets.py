@@ -46,8 +46,8 @@ def datasets_router(*, store: Callable[[], Datasets], analysts: Callable[[], Dat
 
     @router.get("/datasets")
     def list_datasets(request: Request) -> list[DatasetV1]:
-        """Your uploaded files that haven't expired, newest first."""
-        return store().list(owner(request))
+        """Your uploaded files that haven't expired, newest first (none before you have a session)."""
+        return store().list(identify(request).owner)
 
     @router.get("/datasets/{dataset_id}")
     def get_dataset(dataset_id: UUID, request: Request) -> DatasetV1:

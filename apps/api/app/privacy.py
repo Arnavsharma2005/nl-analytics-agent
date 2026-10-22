@@ -3,8 +3,8 @@
 Masking goes by value, not by column name, so it holds however the query reaches the data (aliases, CTEs, string
 concatenation). Email addresses keep their first character and domain, so "how many customers use gmail" still reads
 sensibly. Phone numbers are recognised only with a country code (+91 98765 43210), since a bare run of digits is
-far more often an order number or ID; they keep their last two digits. Column-level detection for uploaded data
-comes with uploads.
+far more often an order number or ID; they keep their last two digits. Uploaded files are also checked column by
+column when they arrive (app/datasets/profile.py), and personal columns are then never returned at all.
 """
 
 import re

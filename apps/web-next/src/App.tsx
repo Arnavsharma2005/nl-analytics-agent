@@ -1,23 +1,31 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getConfig } from "./api/session";
+import type { Dataset } from "./api/types";
 import Account, { SignInNotice } from "./components/Account";
 import AnswerView from "./components/AnswerView";
 import Composer from "./components/Composer";
+import { DatasetBar, UploadButton, YourUploads } from "./components/Datasets";
 import Inspector from "./components/Inspector";
 import ServerStatus from "./components/ServerStatus";
 import { useConversation, type Turn } from "./conversation";
 import { useMedia } from "./lib/hooks";
 
-function Starters({ questions, onAsk }: { questions: string[]; onAsk: (q: string) => void }) {
+interface StartersProps {
+  title: string;
+  intro: string;
+  questions: string[];
+  onAsk: (q: string) => void;
+  children?: React.ReactNode;
+}
+
+function Starters({ title, intro, questions, onAsk, children }: StartersProps) {
   return (
     <section className="pt-10 pb-6" aria-labelledby="start">
-      <h2 id="start" className="max-w-[24ch] text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-        What do you want to know about the store's sales?
+      <h2 id="start" className="max-w-[24ch] text-3xl font-semibold tracking-tight break-words text-ink sm:text-4xl">
+        {title}
       </h2>
-      <p className="mt-3 max-w-[60ch] text-muted">
-        Ask in plain English. You get the answer, a chart, and the SQL behind it. These are good places to start:
-      </p>
+      <p className="mt-3 max-w-[60ch] text-muted">{intro}</p>
       <ul className="mt-6 divide-y divide-rule border-y border-rule">
         {questions.map((q) => (
           <li key={q}>
@@ -27,6 +35,7 @@ function Starters({ questions, onAsk }: { questions: string[]; onAsk: (q: string
           </li>
         ))}
       </ul>
+      {children}
     </section>
   );
 }
@@ -72,12 +81,18 @@ function InspectorPanel({ turn, onClose, docked }: { turn: Turn; onClose: () => 
 }
 
 export default function App() {
-  const { turns, conversationId, ask, retry, reset, open, busy } = useConversation();
+  const { turns, conversationId, subject, ask, retry, reset, begin, open, busy } = useConversation();
   const config = useQuery({ queryKey: ["config"], queryFn: getConfig, staleTime: Infinity });
   const [inspected, setInspected] = useState<string | null>(null);
   const wide = useMedia("(min-width: 1100px)");
   const last = useRef<HTMLDivElement>(null);
   const inspectedTurn = turns.find((t) => t.key === inspected);
+
+  /** Start a new conversation about an uploaded file, or the demo data. */
+  const switchData = (about: Dataset | null) => {
+    setInspected(null);
+    begin(about);
+  };
 
   useEffect(() => {
     if (turns.length) last.current?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -94,9 +109,9 @@ export default function App() {
           {config.data?.features.sign_in && (
             <Account
               current={conversationId}
-              onOpen={(id, messages) => {
+              onOpen={(id, messages, about) => {
                 setInspected(null);
-                open(id, messages);
+                open(id, messages, about);
               }}
             />
           )}
@@ -120,8 +135,30 @@ export default function App() {
           <ServerStatus />
           <SignInNotice />
           <div className="flex-1">
-            {turns.length === 0 ? (
-              <Starters questions={config.data?.starters ?? []} onAsk={ask} />
+            {subject && <DatasetBar dataset={subject} onLeave={() => switchData(null)} />}
+            {turns.length === 0 && subject && subject !== "gone" ? (
+              <Starters
+                title={`What do you want to know about ${subject.name}?`}
+                intro="Ask in plain English about its columns. These questions fit what is in it:"
+                questions={subject.suggestions}
+                onAsk={ask}
+              />
+            ) : turns.length === 0 ? (
+              <Starters
+                title="What do you want to know about the store's sales?"
+                intro="Ask in plain English. You get the answer, a chart, and the SQL behind it. These are good places to start:"
+                questions={config.data?.starters ?? []}
+                onAsk={ask}
+              >
+                {config.data?.upload_max_mb != null && (
+                  <div className="mt-10">
+                    <h3 className="font-semibold text-ink">Or ask about your own data</h3>
+                    <p className="mt-1 mb-4 max-w-[60ch] text-muted">Upload a spreadsheet saved as CSV, with a heading row, and ask about it the same way.</p>
+                    <UploadButton maxMb={config.data.upload_max_mb} onUploaded={switchData} />
+                    <YourUploads current={null} onPick={switchData} />
+                  </div>
+                )}
+              </Starters>
             ) : (
               turns.map((t, i) => (
                 <div key={t.key} ref={i === turns.length - 1 ? last : undefined} className="scroll-mt-4">
@@ -137,7 +174,12 @@ export default function App() {
             )}
           </div>
           <div className="sticky bottom-0 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-3">
-            <Composer onAsk={ask} busy={busy} voice={config.data?.features.voice ?? false} />
+            <Composer
+              onAsk={ask}
+              busy={busy}
+              voice={config.data?.features.voice ?? false}
+              about={subject === "gone" ? null : subject?.name ?? "the sales data"}
+            />
           </div>
         </main>
         {inspectedTurn && <InspectorPanel key={inspectedTurn.key + wide} turn={inspectedTurn} docked={wide} onClose={() => setInspected(null)} />}

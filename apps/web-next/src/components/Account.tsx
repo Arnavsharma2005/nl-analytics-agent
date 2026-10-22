@@ -2,8 +2,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getConversation, getMe, listConversations, signInUrl, signOut } from "../api/account";
-import type { ApiError } from "../api/http";
+import { getDataset } from "../api/datasets";
+import { ApiError } from "../api/http";
 import type { ConversationSummary, Message, User } from "../api/types";
+import type { Subject } from "../conversation";
 import ErrorNotice from "./ErrorNotice";
 
 const when = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
@@ -22,10 +24,21 @@ function GitHubMark() {
   );
 }
 
+/** The uploaded file a conversation was about, if any: "gone" once it has been deleted. */
+async function about(datasetId: string | null): Promise<Subject> {
+  if (!datasetId) return null;
+  try {
+    return await getDataset(datasetId);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return "gone";
+    throw e;
+  }
+}
+
 interface HistoryProps {
   user: User;
   current: string;
-  onOpen: (id: string, messages: Message[]) => void;
+  onOpen: (id: string, messages: Message[], about: Subject) => void;
   onClose: () => void;
 }
 
@@ -34,9 +47,9 @@ function History({ user, current, onOpen, onClose }: HistoryProps) {
   const queryClient = useQueryClient();
   const conversations = useQuery({ queryKey: ["conversations"], queryFn: listConversations, staleTime: 0 });
   const opening = useMutation({
-    mutationFn: (c: ConversationSummary) => getConversation(c.id),
-    onSuccess: (messages, c) => {
-      onOpen(c.id, messages);
+    mutationFn: (c: ConversationSummary) => Promise.all([getConversation(c.id), about(c.dataset_id)]),
+    onSuccess: ([messages, subject], c) => {
+      onOpen(c.id, messages, subject);
       onClose();
     },
   });
@@ -133,7 +146,7 @@ export function SignInNotice() {
 
 interface Props {
   current: string;
-  onOpen: (id: string, messages: Message[]) => void;
+  onOpen: (id: string, messages: Message[], about: Subject) => void;
 }
 
 export default function Account({ current, onOpen }: Props) {
@@ -146,7 +159,7 @@ export default function Account({ current, onOpen }: Props) {
     return (
       <a href={signInUrl(location.pathname)} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm hover:bg-rule/60">
         <GitHubMark />
-        Sign in<span className="sr-only sm:not-sr-only">&nbsp;with GitHub</span>
+        <span>Sign in<span className="sr-only sm:not-sr-only"> with GitHub</span></span>
       </a>
     );
   }

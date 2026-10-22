@@ -37,6 +37,15 @@ and the SQL and answers they got (`app/agents/followup.py`, one call to the fast
 then answers the rewrite exactly as it answers a first question, and the answer shows it as "Understood as: ...".
 A first question skips this step, so it is answered as before. See [ADR 0002](docs/adr/0002-conversation-memory-from-stored-messages.md).
 
+**Your own data.** In `/v1`, a visitor can upload a CSV file (up to 5 MB, 200,000 rows and 60 columns) and ask
+about it the same way. DuckDB's CSV reader works out the delimiter and the types; columns get plain SQL names (the
+original headings are kept as notes for the SQL agent), and each column is profiled for its range or common values
+and checked for personal data by its name and its values (email addresses, phone numbers, Aadhaar, PAN and card
+numbers, dates of birth, street addresses). The file is kept as Parquet in the app database for a day. Questions
+about it run in an in-memory DuckDB that cannot read files, reach the network or load extensions, through the
+same guard as the demo, and the prompts are told about that file instead of the store's sales
+(`app/brief.py`, `app/datasets/`).
+
 **Stack:** Python, LangGraph, LangChain, FastAPI, PostgreSQL, SQLAlchemy, sqlglot, React, TypeScript, Recharts, Docker, Railway, GitHub Actions.
 
 ## Model fallback chain
@@ -144,6 +153,9 @@ app. The full schema is at `/docs` while the app runs.
 | `POST` | `/v1/messages/{id}/feedback` | `{"rating": "up" \| "down", "category": "wrong_data" \| "misunderstood" \| "wrong_chart" \| "lost_context" \| "other", "comment": "..."}` |
 | `POST` | `/v1/messages/{id}/explain` | The answer's SQL as plain-English steps (one model call, then kept) |
 | `POST` | `/v1/transcribe` | Multipart `audio` (webm, ogg, mp4, mpeg, wav or m4a, up to 2 MB) → `{"text": "..."}`, with Whisper on Groq; the key stays on the server |
+| `POST` | `/v1/datasets` | Multipart `file`: a CSV file → its id, table and column names, row count, a profile of each column (personal ones marked) and three suggested questions. Ask about it by adding `"dataset_id"` to a question. It counts as a question against the limits; you can keep 3 at a time, for a day |
+| `GET` | `/v1/datasets` | Your uploaded files that haven't expired |
+| `GET`, `DELETE` | `/v1/datasets/{id}` | One of your uploaded files, or delete it now |
 | `GET` | `/v1/conversations` | Your recent conversations (signed in: from every device, kept 90 days; otherwise this session's) |
 | `GET` | `/v1/conversations/{id}/messages` | The answered messages of one of your conversations, to pick it up again |
 | `GET` | `/v1/auth/github?next=/` | Sign in with GitHub (optional): redirects to GitHub and back. Raises the question limits and keeps history |
@@ -292,6 +304,8 @@ apps/api/
   app/checks.py   empty-result and summary-figure checks
   app/graph.py    LangGraph wiring and the retry loop
   app/sql_guard.py, app/db.py   validation, introspection, read-only execution
+  app/brief.py    what the prompts are told about the data: the demo's, or an uploaded file's
+  app/datasets/   CSV uploads: reading and profiling, storage, the locked-down DuckDB source
   app/llm.py, app/providers.py  fallback chain across the 5 providers
   app/replay.py   record model answers to a cassette and replay them
   app/sessions.py, app/usage.py, app/answer_cache.py   bot check, quotas, model budgets, answer cache

@@ -11,6 +11,8 @@ export type Explanation = Schemas["ExplanationV1"];
 export type Me = Schemas["MeV1"];
 export type User = Schemas["UserV1"];
 export type ConversationSummary = Schemas["ConversationV1"];
+export type Dataset = Schemas["DatasetV1"];
+export type DatasetColumn = Schemas["ColumnV1"];
 export type Cell = string | number | boolean | null;
 
 /** The data of each server-sent event on POST /v1/conversations/{id}/messages. */

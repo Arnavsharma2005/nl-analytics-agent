@@ -208,7 +208,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         analyst=analyst_factory, messages=messages_factory, llm=llm_factory, suggester=suggester_factory,
         transcriber=transcriber_factory, identify=identify, spend=spend, turnstile_site_key=turnstile_site_key,
         starters=starters, sign_in=lambda: github_factory() is not None, datasets=dataset_analysts_factory,
-        uploads=settings.uploads,
+        upload_max_mb=settings.upload_max_mb if settings.uploads else None,
     ))
     if settings.uploads:
         app.include_router(datasets_router(

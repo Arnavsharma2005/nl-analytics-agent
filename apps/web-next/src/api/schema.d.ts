@@ -307,7 +307,7 @@ export interface paths {
         };
         /**
          * List Datasets
-         * @description Your uploaded files that haven't expired, newest first.
+         * @description Your uploaded files that haven't expired, newest first (none before you have a session).
          */
         get: operations["list_datasets_v1_datasets_get"];
         put?: never;
@@ -658,6 +658,11 @@ export interface components {
             starters: string[];
             /** Turnstile Site Key */
             turnstile_site_key: string | null;
+            /**
+             * Upload Max Mb
+             * @description The largest CSV file that can be uploaded; null when uploads are off.
+             */
+            upload_max_mb: number | null;
         };
         /**
          * ConversationV1
