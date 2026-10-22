@@ -4,6 +4,9 @@ __pycache__/
 .env
 node_modules/
 apps/web/dist/
+apps/web-next/dist/
+apps/web-next/test-results/
+apps/web-next/playwright-report/
 *.tsbuildinfo
 .pytest_cache/
 .ruff_cache/

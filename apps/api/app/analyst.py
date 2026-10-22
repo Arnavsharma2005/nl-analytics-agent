@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.chart import ChartSpec
 from app.context import Context
@@ -37,13 +37,19 @@ STEP_LABELS = {
 class Failure(BaseModel):
     """An attempt that failed validation or execution, or found nothing, and was fed back to the SQL agent."""
 
+    # Responses always carry every field, so the OpenAPI schema marks them required for generated clients.
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     sql: str
     error: str
     stage: Literal["validate", "execute", "result"]
 
 
 class Answer(BaseModel):
-    """Everything the analyst returns for one question. New fields are only ever added, and always optional."""
+    """Everything the analyst returns for one question. New fields are only ever added, each with a default."""
+
+    # Responses always carry every field, so the OpenAPI schema marks them required for generated clients.
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
 
     question: str
     intent: Literal["data_query", "schema_question", "out_of_scope"] | None = None

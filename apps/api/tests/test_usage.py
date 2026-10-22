@@ -243,3 +243,22 @@ def test_stream_serves_cache_hits(db, app_tables):
                       Table(hit.columns, hit.rows, hit.truncated), Chart(hit.chart), Token(hit.summary, replace=True),
                       Done(hit)]
     assert isinstance(second[-1].answer, Answer) and second[-1].answer.cached
+
+
+def test_the_web_apps_proxy_passes_on_the_visitors_ip(db, app_tables, monkeypatch):
+    monkeypatch.setenv("PROXY_SECRET", "s3cret")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        c = make_client(db, Sessions("secret", 60), Quota(Counters(app_tables), per_session_hour=0, per_ip_day=1))
+
+        def ask(ip, secret="s3cret"):
+            return c.post("/api/ask", json={"question": "Revenue by region"},
+                          headers={"x-client-ip": ip, "x-proxy-secret": secret}).status_code
+
+        assert ask("9.9.9.9") == 200 and ask("9.9.9.9") == 429 and ask("8.8.8.8") == 200
+        # Without the secret the header is not trusted: these all count against the test client's own address.
+        assert ask("7.7.7.7", "guess") == 200 and ask("6.6.6.6", "guess") == 429
+    finally:
+        get_settings.cache_clear()

@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-sans-devanagari/400.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+
+/* Indigo ink on cool paper, with turmeric marking the figures in an answer. */
+@theme {
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Devanagari", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-turmeric: var(--turmeric);
+  --color-mark: var(--mark);
+  --color-teal: var(--teal);
+  --color-danger: var(--danger);
+}
+
+:root {
+  --paper: #f6f7fa;
+  --surface: #ffffff;
+  --text: #1a1f2e;
+  --muted: #5b6478;
+  --rule: #dde2eb;
+  --ink: #1e2a5e;
+  --ink-soft: #3b4a86;
+  --turmeric: #b97c08;
+  --mark: #fbefd3;
+  --teal: #13756f;
+  --danger: #b3261e;
+  --series: #2e3f8f, #13756f, #d9971a, #b4446c, #6b5ca5, #7a8b2e;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #10131c;
+    --surface: #171b27;
+    --text: #e7e9f0;
+    --muted: #9aa3b8;
+    --rule: #2a3042;
+    --ink: #b4c2ff;
+    --ink-soft: #8f9fe6;
+    --turmeric: #f0b544;
+    --mark: rgba(240, 181, 68, 0.16);
+    --teal: #4fc1b8;
+    --danger: #ff8a80;
+    --series: #8f9fe6, #4fc1b8, #f0b544, #e07fa3, #a99be0, #b5c45e;
+    color-scheme: dark;
+  }
+}
+
+html { background: var(--paper); color: var(--text); font-family: var(--font-sans); }
+body { margin: 0; font-feature-settings: "tnum" 1; -webkit-font-smoothing: antialiased; }
+
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* A figure in an answer: tabular, on a turmeric wash. */
+.figure { background: var(--mark); color: var(--text); border-bottom: 2px solid var(--turmeric); padding: 0 2px; border-radius: 2px; }
+.caret::after { content: ""; display: inline-block; width: 0.5ch; height: 1em; margin-left: 2px; vertical-align: -0.1em; background: var(--ink); animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }

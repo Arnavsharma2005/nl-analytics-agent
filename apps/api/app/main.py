@@ -1,3 +1,4 @@
+import hmac
 import json
 import logging
 from functools import lru_cache
@@ -121,6 +122,10 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
     install(app)
 
     def client_ip(request: Request) -> str:
+        secret = request.headers.get("x-proxy-secret")
+        if settings.proxy_secret and secret and hmac.compare_digest(secret.encode(), settings.proxy_secret.encode()):
+            if visitor_ip := request.headers.get("x-client-ip"):
+                return visitor_ip.strip()
         forwarded = request.headers.get(settings.client_ip_header) if settings.client_ip_header else None
         if forwarded:
             return forwarded.split(",")[0].strip()

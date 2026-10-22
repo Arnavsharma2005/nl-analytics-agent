@@ -2,7 +2,7 @@ import json
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.llm import LLM
 
@@ -22,6 +22,9 @@ x, y and series must be column names from the result. y lists the numeric measur
 
 
 class ChartSpec(BaseModel):
+    # Responses always carry every field, so the OpenAPI schema marks them required for generated clients.
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     type: ChartType
     x: str | None = Field(default=None, description="Column for the x axis or pie labels; null for kpi/table.")
     y: list[str] = Field(default_factory=list, description="Numeric measure column(s).")
