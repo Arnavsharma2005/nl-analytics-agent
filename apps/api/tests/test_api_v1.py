@@ -23,6 +23,7 @@ from .conftest import FakeLLM
 from .test_graph import REVENUE_BY_REGION
 
 SSE = {"Accept": "text/event-stream"}
+WHISPER = "whisper-large-v3-turbo"
 
 
 class FakeTranscriber:
@@ -252,10 +253,10 @@ def test_the_transcriber_sends_the_audio_to_whisper():
         seen.update(url=url, data=data, file=files["file"])
         return httpx.Response(200, json={"text": " Revenue by region "}, request=httpx.Request("POST", url))
 
-    assert Transcriber("key", "whisper-large-v3-turbo", post=post).transcribe(b"abc", "audio/x-m4a", "hi") == \
+    assert Transcriber("key", WHISPER, post=post).transcribe(b"abc", "audio/x-m4a", "hi") == \
         "Revenue by region"
     assert seen["file"] == ("question.m4a", b"abc", "audio/x-m4a")
-    assert seen["data"] == {"model": "whisper-large-v3-turbo", "response_format": "json", "temperature": "0",
+    assert seen["data"] == {"model": WHISPER, "response_format": "json", "temperature": "0",
                             "language": "hi"}
 
     def fails(url, headers, data, files, timeout):
