@@ -99,6 +99,7 @@ def main() -> int:
 
     from app import semantic
     from app.analyst import Analyst
+    from app.confidence import load_model
     from app.context import Context
     from app.providers import build_embedder, build_llm
     from app.replay import RecordingLLM, ReplayLLM
@@ -114,7 +115,8 @@ def main() -> int:
     features = {"context_retrieval": bool(context), "verified_fast_path": bool(context) and settings.verified_fast_path,
                 "check_results": settings.check_results, "check_summaries": settings.check_summaries}
     analyst = Analyst(llm, db, max_attempts=settings.max_sql_attempts, rows_for_llm=settings.rows_for_llm,
-                      context=context, check_results=settings.check_results, check_summaries=settings.check_summaries)
+                      context=context, check_results=settings.check_results, check_summaries=settings.check_summaries,
+                      confidence=load_model())
 
     results = []
     history: dict[int, list] = defaultdict(list)  # earlier turns of each conversation, as the app keeps them
@@ -140,6 +142,9 @@ def main() -> int:
             "intent": answer.intent if answer else None, "sql": answer.sql if answer else None,
             "attempts": answer.attempts if answer else 0, "latency_s": round(latency, 2), "error": error,
             "verified": bool(answer and answer.verified_question),
+            # What eval/train_confidence.py learns from, and the current model's score if one is trained.
+            "signals": answer.confidence.signals.model_dump() if answer and answer.confidence else None,
+            "confidence": answer.confidence.probability if answer and answer.confidence else None,
             "gold_rows": len(gold), "pred_rows": None if pred is None else len(pred),
             # The provider that wrote the final SQL (fallbacks can mix models within one run).
             "sql_provider": next((c["provider"] for c in reversed(answer.llm_calls if answer else [])
