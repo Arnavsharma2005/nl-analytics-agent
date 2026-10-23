@@ -15,7 +15,7 @@ from .test_graph import REVENUE_BY_REGION
 def client(db, sessions=None, quota=None):
     analyst = Analyst(FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="t")), db)
     sessions = sessions or Sessions("test-secret", 3600)
-    return TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db,
+    return TestClient(create_app(analyst_factory=lambda *_: analyst, db_factory=lambda: db,
                                  sessions_factory=lambda: sessions, quota_factory=lambda: quota))
 
 
@@ -97,7 +97,7 @@ def test_providers_endpoint_and_all_failed_is_503(db):
     llm = FallbackLLM([Provider("groq", "Groq · m", "https://x", "m", "k"), Provider("mistral", "Mistral · m", "https://x", "m", None)],
                       client_factory=lambda p, t: Down())
     analyst = Analyst(llm, db)
-    c = TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db, llm_factory=lambda: llm,
+    c = TestClient(create_app(analyst_factory=lambda *_: analyst, db_factory=lambda: db, llm_factory=lambda: llm,
                               sessions_factory=lambda: Sessions("s", 60), quota_factory=lambda: None))
     r = c.post("/api/ask", json={"question": "Revenue by region"})
     assert r.status_code == 503 and r.json()["errors"] == [{"provider": "Groq · m", "error": "rate limited"}]

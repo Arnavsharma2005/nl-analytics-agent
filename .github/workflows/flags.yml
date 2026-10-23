@@ -1,0 +1,74 @@
+name: Flags
+
+# Change who gets a feature from GitHub (Actions -> Flags -> Run workflow), with no deploy: the app picks it up
+# within a minute. Leave "audience" empty to only list the flags. See apps/api/app/flags.py.
+# Needs the repository secret FLAGS_APP_DATABASE_URL: the production app database (the same value as the app's
+# APP_DATABASE_URL, or DATABASE_URL when it has none).
+
+on:
+  workflow_dispatch:
+    inputs:
+      flag:
+        description: Which feature
+        type: choice
+        options:
+          - context_retrieval
+          - verified_fast_path
+          - check_results
+          - check_summaries
+          - driver_analysis
+          - forecasting
+          - learned_router
+          - deep_analysis
+          - schedules
+      audience:
+        description: Who gets it ("reset" follows the setting again; empty only lists)
+        type: choice
+        default: ""
+        options:
+          - ""
+          - "off"
+          - curators
+          - users
+          - everyone
+          - reset
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flags
+  cancel-in-progress: false
+
+jobs:
+  flags:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      APP_DATABASE_URL: ${{ secrets.FLAGS_APP_DATABASE_URL }}
+      FLAG: ${{ inputs.flag }}
+      AUDIENCE: ${{ inputs.audience }}
+    steps:
+      - name: Check the database secret is set
+        run: |
+          if [ -z "$APP_DATABASE_URL" ]; then
+            echo "::error::Set the FLAGS_APP_DATABASE_URL secret in the production environment first."
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - run: pip install -r apps/api/requirements.txt
+      - name: Set the flag and list them all
+        working-directory: apps/api
+        shell: bash  # with pipefail, so a failed change fails the run
+        run: |
+          case "$AUDIENCE" in
+            "") python scripts/flags.py ;;
+            reset) python scripts/flags.py reset "$FLAG" ;;
+            *) python scripts/flags.py set "$FLAG" "$AUDIENCE" ;;
+          esac | tee -a "$GITHUB_STEP_SUMMARY"

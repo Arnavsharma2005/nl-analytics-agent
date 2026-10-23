@@ -228,6 +228,24 @@ Six switches, each off by default. Each is turned on only when the held-out eval
 
 Clients for the API live in `packages/`: [`sdk-py`](packages/sdk-py) (Python) and [`sdk-ts`](packages/sdk-ts) (TypeScript, Node 22+ and browsers), both generated from the OpenAPI spec and checked against it in CI. [`widget`](packages/widget) is a `<nl-analyst>` web component for asking questions from other sites, served at `/widget.js` when `API_KEYS` is on.
 
+### Switching features on in stages
+
+Most switches above are also feature flags (`apps/api/app/flags.py`): `CONTEXT_RETRIEVAL`, `VERIFIED_FAST_PATH`,
+`CHECK_RESULTS`, `CHECK_SUMMARIES`, `DRIVER_ANALYSIS`, `FORECASTING`, `LEARNED_ROUTER`, `DEEP_ANALYSIS` and
+`SCHEDULES`. A flag set in the database names who gets the feature: `off`, `curators` (the logins in `CURATORS`, so
+you first), `users` (anyone signed in) or `everyone`. The app reads flags once a minute, so a change needs no deploy,
+and turning a flag off is the fastest way back. A flag that was never set follows its setting.
+
+Set one from GitHub (Actions, then Flags, then Run workflow, with the `FLAGS_APP_DATABASE_URL` secret in the
+`production` environment) or from a shell with the app's database settings:
+
+```bash
+cd apps/api
+python scripts/flags.py                          # every flag and who gets it
+python scripts/flags.py set deep_analysis users  # off, curators, users or everyone
+python scripts/flags.py reset deep_analysis      # follow DEEP_ANALYSIS again
+```
+
 ### Prompt versions and GEPA
 
 The SQL writer's prompt is a file per version in `apps/api/semantic/prompts/`. A version is never edited once used; a better prompt becomes the next version. `python eval/optimize_prompt.py` (after `pip install -r eval/requirements.txt`, with an LLM key and `DATABASE_URL` set) evolves the current prompt with [GEPA](https://github.com/gepa-ai/gepa). It runs candidates on the dev questions only, feeds each wrong query's error or result difference back to a reflecting model, and writes the best candidate as the next version with its dev scores beside it. The test split is never read. A new version is used only after it beats the current one on the held-out split: `SQL_PROMPT=v2 python eval/run_eval.py --split test`, then set `SQL_PROMPT=v2`.

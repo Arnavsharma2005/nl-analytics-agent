@@ -224,10 +224,16 @@ class Schedules:
                           last_value=row.last_value, created_at=row.created_at)
 
 
-def run_due(schedules: Schedules, analyst: Analyst, notifier: Notifier, app_url: str | None = None) -> list[str]:
-    """Run every due schedule once. Returns one line per schedule saying what happened."""
+def run_due(schedules: Schedules, analyst: Analyst, notifier: Notifier, app_url: str | None = None,
+            allowed: Callable[[int], bool] = lambda _: True) -> list[str]:
+    """Run every due schedule once. Returns one line per schedule saying what happened. A schedule whose owner
+    `allowed` refuses (its flag is not on for them) skips this run."""
     done = []
     for row in schedules.claim_due():
+        if not allowed(row.user_id):
+            schedules.record(row.id, "paused", row.last_value, row.firing)
+            done.append(f"{row.id}: paused")
+            continue
         firing, value = row.firing, None
         try:
             answer = analyst.ask(row.question)

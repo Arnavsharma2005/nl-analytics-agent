@@ -12,14 +12,16 @@ from app.usage import Visitor
 
 
 def schedules_router(*, schedules: Callable[[], Schedules], notifier: Callable[[], Notifier],
-                     identify: Callable[[Request], Visitor], email_allowlist: list[str], enabled: bool) -> APIRouter:
+                     identify: Callable[[Request], Visitor], email_allowlist: list[str],
+                     enabled: Callable[[int | None], bool]) -> APIRouter:
+    """`enabled` says whether schedules are on for a user (app/flags.py)."""
     router = APIRouter(prefix="/v1", tags=["v1"])
 
     def user_of(request: Request) -> int:
-        if not enabled:
+        who = identify(request)
+        if not enabled(who.user):
             raise Problem(404, "schedules_off", "Scheduled reports are not turned on here",
                           "Set SCHEDULES=true on the server, with email or the Telegram bot set up.")
-        who = identify(request)
         if not who.user:
             raise Problem(401, "sign_in_required", "Sign in to schedule reports and alerts")
         return who.user

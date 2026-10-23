@@ -35,7 +35,7 @@ def sdk(db, app_tables, monkeypatch):
     me = users.sign_in(Profile(github_id=1, login="arnav", name=None, avatar_url=None))
     key = ApiKeys(app_tables).create(me.id, KeyRequestV1(name="SDK")).key
     sessions = Sessions("secret", 3600, Turnstile("ts", lambda *a, **k: None))  # the bot check is on
-    app = create_app(analyst_factory=lambda: AppAnalyst(llm, db), db_factory=lambda: db, llm_factory=lambda: llm,
+    app = create_app(analyst_factory=lambda *_: AppAnalyst(llm, db), db_factory=lambda: db, llm_factory=lambda: llm,
                      sessions_factory=lambda: sessions, quota_factory=lambda: None, users_factory=lambda: users,
                      github_factory=lambda: object(), transcriber_factory=lambda: None,
                      api_keys_factory=lambda: ApiKeys(app_tables), reports_factory=lambda: Reports(app_tables),

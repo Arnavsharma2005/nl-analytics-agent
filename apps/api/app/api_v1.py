@@ -77,14 +77,16 @@ def _answer_events(answer: Answer) -> list[dict]:
     return events
 
 
-def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages], llm: Callable[[], LLM],
+def v1_router(*, analyst: Callable[[Visitor], Analyst], messages: Callable[[], Messages], llm: Callable[[], LLM],
               suggester: Callable[[], Context], transcriber: Callable[[], Transcriber | None],
               identify: Callable[[Request], Visitor], spend: Callable[[Visitor], None],
               turnstile_site_key: Callable[[], str | None], starters: Callable[[], list[str]],
               sign_in: Callable[[], bool], datasets: Callable[[], DatasetAnalysts], upload_max_mb: int | None,
-              reports: bool = False, api_keys: bool = False) -> APIRouter:
+              reports: Callable[[int | None], bool] = lambda _: False, api_keys: bool = False,
+              user_of: Callable[[Request], int | None] = lambda _: None) -> APIRouter:
     """`identify` names the visitor (raising if the bot check is missing); `spend` counts one question against
-    their quota (raising when it is used up)."""
+    their quota (raising when it is used up). `analyst` is the analyst for a visitor, with the features on for them;
+    `reports` says whether Deep Analysis is on for a user (None when signed out), and `user_of` who is signed in."""
     router = APIRouter(prefix="/v1", tags=["v1"])
 
     def suggestions(answer: Answer, dataset: DatasetV1 | None) -> list[str]:
@@ -104,12 +106,13 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
             return None
 
     @router.get("/config")
-    def config() -> ConfigV1:
+    def config(request: Request) -> ConfigV1:
         """What the web app needs at start-up."""
+        user = user_of(request)
         return ConfigV1(turnstile_site_key=turnstile_site_key(), starters=starters(),
                         features={"voice": transcriber() is not None, "explain": True, "feedback": True,
                                   "sign_in": sign_in(), "uploads": upload_max_mb is not None,
-                                  "reports": reports and sign_in(), "api_keys": api_keys and sign_in()},
+                                  "reports": sign_in() and reports(user), "api_keys": api_keys and sign_in()},
                         upload_max_mb=upload_max_mb)
 
     @router.post("/conversations/{conversation_id}/messages", response_model=MessageV1,
@@ -151,7 +154,7 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
                 if store_ok:
                     await store(messages().abandon, message_id)
                 raise
-        chosen = chosen or analyst()
+        chosen = chosen or analyst(visitor)
         # Earlier turns let a follow-up ("and last year?") be understood; without them it is asked on its own.
         history = []
         if state == "new" and store_ok:
