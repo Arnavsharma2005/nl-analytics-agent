@@ -1,10 +1,16 @@
-# Render Blueprint: one Docker web service (API + built frontend) and a Postgres database, both on the free plan.
+# Render Blueprint: production and staging, each one Docker web service (API + built frontend), on the free plan.
 # In Render: New -> Blueprint -> pick this repo. Render asks for each `sync: false` key; leave unused ones empty.
+#
+# Production deploys from the `release` branch, which only the Promote workflow moves (DEPLOY.md, "Releasing").
+# Staging deploys every merge to `main`, on its own database and keys, so a change is tried there first. Both run
+# `alembic upgrade head` as they start, before serving; the running version keeps serving until the new one is
+# healthy, and migrations only add (expand, then contract), so the running version keeps working on the new schema.
 services:
   - type: web
     name: nl-analytics-agent
     runtime: docker
     plan: free
+    branch: release
     dockerfilePath: ./Dockerfile
     healthCheckPath: /healthz
     autoDeploy: true
@@ -46,6 +52,38 @@ services:
       # OpenRouter free models: 50 a day; Cloudflare: 10,000 neurons a day).
       - key: LLM_DAILY_BUDGET
         value: '{"groq": 900, "openrouter": 45, "cloudflare": 250}'
+
+  - type: web
+    name: nl-analytics-agent-staging
+    runtime: docker
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      # A Neon branch of production's database (DEPLOY.md), never production's own, and separate model keys so
+      # tests on staging cannot use up production's free quotas.
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: PUBLIC_URL
+        sync: false
+      - key: CURATORS
+        sync: false
+      - key: LLM_DAILY_BUDGET
+        value: '{"groq": 200, "cloudflare": 100}'
 
 databases:
   - name: nl-analytics-db

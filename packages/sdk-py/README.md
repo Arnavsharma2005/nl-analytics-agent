@@ -4,6 +4,8 @@ A small client for the analytics agent's `/v1` API. Its models are generated fro
 (`./generate.sh`), so they match the API of the same commit.
 
 ```sh
+pip install nl-analytics-sdk
+# or, before a release is published, from the repository:
 pip install "git+https://github.com/Arnavsharma2005/nl-analytics-agent#subdirectory=packages/sdk-py"
 ```
 

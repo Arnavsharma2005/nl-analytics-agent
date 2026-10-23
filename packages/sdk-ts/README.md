@@ -3,6 +3,12 @@
 A small client for the analytics agent's `/v1` API, for Node 22+ and browsers. Its types are generated from the
 API's OpenAPI spec (`npm run gen`), so they match the API of the same commit. No runtime dependencies.
 
+```sh
+npm install nl-analytics-sdk
+```
+
+Each app release publishes the SDK at the same version, so SDK 2.4 speaks to the API of release 2.4.
+
 ```ts
 import { Analyst, ApiError } from "nl-analytics-sdk";
 

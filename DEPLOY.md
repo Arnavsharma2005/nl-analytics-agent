@@ -111,13 +111,55 @@ To change a key later, edit it under **Variables**. Railway redeploys automatica
 
 1. Sign in at [render.com](https://render.com) with GitHub.
 2. Click **New** → **Blueprint** → pick `Arnavsharma2005/nl-analytics-agent`. Render reads `render.yaml` and creates
-   the web service and a free PostgreSQL database.
+   production (deploying the `release` branch), staging (deploying `main`) and a free PostgreSQL database. Create
+   the `release` branch first if it isn't there: `git push origin main:release`.
 3. Render asks for each API key. Paste the ones you have and leave the rest empty, then click **Apply**.
 4. The first start loads the sample data. When the deploy is live, open the `onrender.com` URL shown on the service
    and check `/readyz` returns `{"status":"ok"}`. Render's own health check uses `/healthz`, which skips the database.
 
 The free web service sleeps after 15 minutes without traffic, so the first request after that takes about a minute.
 Render deletes free databases 30 days after creation unless you upgrade.
+
+## Releasing
+
+Every merge to `main` deploys to staging. Production only changes when you promote:
+
+1. Check the change on staging (its `onrender.com` URL), and turn new features on there first.
+2. On GitHub, open **Actions** → **Promote** → **Run workflow** on `main`, with the next version: `2.4.0` for new
+   features, `2.3.1` for fixes, `3.0.0` when the `/v1` API changes in a way that breaks clients.
+3. Promote checks that CI passed on `main`'s latest commit, tags it, writes the release notes from the merged pull
+   requests, moves `release` to it (Render deploys production), starts the Release workflow (the self-host image,
+   and the SDKs and widget when `PUBLISH_PACKAGES` is on), then waits for production to run the new commit and
+   checks it answers.
+
+New features ship off and are switched on in stages with the Flags workflow: curators (you), then signed-in users,
+then everyone, a day apart, watching Sentry and Langfuse in between (README, "Switching features on in stages").
+
+Ways back, fastest first:
+
+1. Turn the feature's flag off (Actions → Flags). Under a minute, no deploy.
+2. In Render, open production → **Events** and roll back to the previous deploy.
+3. Point `release` at the previous tag from your machine: `git push origin v2.3.0:release --force`. The next
+   Promote fast-forwards from there.
+4. A migration gone wrong: restore the Neon backup branch taken before the release (below).
+
+Migrations only add tables and columns. A column or table is dropped in a later release, once nothing reads it,
+so the previous version always runs on the new schema.
+
+## One-time setup, by deployment phase
+
+These need your accounts, so they are yours to do. Each is free. The code for every phase is already merged.
+
+| Phase | Set up |
+| --- | --- |
+| D0 Foundations | A [Neon](https://neon.tech) account with two projects: A for the app's own tables, B for the data the model queries. In Render, set production's `DATABASE_URL` to B and `APP_DATABASE_URL` to A, and keep Render's own database until it expires as the way back. A [Langfuse](https://langfuse.com) and a [Sentry](https://sentry.io) project (`LANGFUSE_*`, `SENTRY_DSN`). [UptimeRobot](https://uptimerobot.com) on `/healthz`. GitHub environments `production` and `staging` (Settings → Environments) with `FLAGS_APP_DATABASE_URL` (Neon A) and `SMOKE_API_KEY` in `production`. Before each release with a migration, take a Neon branch of A and B (Neon → Branches → Create) as the backup. |
+| D1 Safety | A [Cloudflare](https://dash.cloudflare.com) account: a Turnstile widget (`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`). In Neon B, a read-only role (`CREATE ROLE analyst_ro LOGIN PASSWORD '…'; GRANT USAGE ON SCHEMA public TO analyst_ro; GRANT SELECT ON ALL TABLES IN SCHEMA public TO analyst_ro;`) used in `DATABASE_URL`, with `REQUIRE_READ_ONLY_DATA=true`. |
+| D2 Context | A Cloudflare Workers AI token (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) for embeddings. Then switch `context_retrieval` on in stages. |
+| D3 Web app | A Cloudflare Pages project (above), its domain in `CORS_ORIGINS`, and `WEB_APP=next` on the API. Groq's key also turns on voice questions. |
+| D4 Users | A GitHub OAuth app for production and one for staging, each with its own callback URL (above), and your login in `CURATORS` (`["Arnavsharma2005"]`). |
+| D5 Platform | Nothing: the Release workflow publishes the self-host image to GitHub Container Registry on each tag. Set `MCP=true` for the MCP server. |
+| D6 Intelligence | Repository secrets for the batch jobs (`INSIGHTS_*`, model keys), then `deep_analysis`, `driver_analysis` and `forecasting` on in stages. |
+| D7 Reach | `API_KEYS=true`. A Telegram bot from BotFather (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, then `python apps/api/scripts/telegram_webhook.py`). [Resend](https://resend.com) with a domain you control, e.g. a free `is-a.dev` subdomain (`RESEND_API_KEY`, `EMAIL_FROM`), and the `SCHEDULES_*` secrets. To publish the packages: an npm account with an automation token as `NPM_TOKEN` in an `npm` environment, a PyPI trusted publisher for this repo's `release.yml` with environment `pypi`, and the repository variable `PUBLISH_PACKAGES=true`. Add a LICENSE first, so others know how they may use them. |
 
 ## Deploy the new web app on Cloudflare Pages (free)
 
