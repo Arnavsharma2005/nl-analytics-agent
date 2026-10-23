@@ -141,3 +141,36 @@ def test_without_the_feature_keys_are_refused_and_ignored(db, app_tables):
     client = TestClient(app)
     r = client.get("/v1/keys")
     assert r.status_code == 404 and r.json()["code"] == "api_keys_off"
+
+
+def test_any_site_may_send_a_keyed_request_but_only_listed_ones_get_answers(make):
+    build, signed_in = make
+    web = signed_in(build())
+    key = web.post("/v1/keys", json={"name": "Widget", "origins": ["https://shop.example"]}).json()["key"]
+    site = build()
+
+    pre = site.options("/v1/conversations/7f1d2c3b-0000-4000-8000-000000000001/messages", headers={
+        "Origin": "https://shop.example", "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "authorization, content-type, idempotency-key"})
+    assert pre.status_code == 204 and pre.headers["access-control-allow-origin"] == "https://shop.example"
+    assert "access-control-allow-credentials" not in pre.headers
+
+    ok = ask(site, {"Authorization": f"Bearer {key}", "Origin": "https://shop.example"})
+    assert ok.status_code == 200 and ok.headers["access-control-allow-origin"] == "https://shop.example"
+    refused = ask(site, {"Authorization": f"Bearer {key}", "Origin": "https://evil.example"})
+    assert refused.status_code == 403 and refused.headers["access-control-allow-origin"] == "https://evil.example"
+    assert refused.json()["code"] == "origin_not_allowed"  # readable, so the widget can say why
+
+    # Without a key, a cookie request from another site gets no CORS answer.
+    plain = site.get("/v1/config", headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in plain.headers
+
+
+def test_the_widget_script_is_served_to_any_site(make, tmp_path, monkeypatch):
+    script = tmp_path / "nl-analyst.js"
+    script.write_text("customElements.define('nl-analyst', class extends HTMLElement {});")
+    monkeypatch.setattr("app.main.WIDGET", script)
+    build, _ = make
+    r = build().get("/widget.js")
+    assert r.status_code == 200 and r.text.startswith("customElements")
+    assert r.headers["content-type"].startswith("text/javascript") and r.headers["access-control-allow-origin"] == "*"

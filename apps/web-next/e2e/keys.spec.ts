@@ -31,7 +31,8 @@ test("a new key is shown once and can be revoked", async ({ page }) => {
   await page.getByLabel("Sites that may use it in a browser").fill("https://shop.example");
   await page.getByRole("button", { name: "Make a key" }).click();
 
-  await expect(page.getByText("aak_example")).toBeVisible();
+  await expect(page.getByText("aak_example", { exact: true })).toBeVisible();
+  await expect(page.getByText('<nl-analyst base-url="http://localhost:4173" api-key="aak_example">')).toBeVisible();
   expect(made).toEqual({ name: "Shop widget", origins: ["https://shop.example"] });
   await expect(page.getByText("never used, for https://shop.example")).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);

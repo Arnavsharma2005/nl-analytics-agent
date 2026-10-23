@@ -13,6 +13,14 @@ RUN npm ci --no-audit --no-fund
 COPY apps/web-next/ ./
 RUN npm run build
 
+FROM node:25-alpine AS widget
+WORKDIR /app/packages/widget
+COPY packages/widget/package.json packages/widget/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY packages/sdk-ts/src /app/packages/sdk-ts/src
+COPY packages/widget/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app/apps/api
@@ -21,6 +29,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY apps/api/ ./
 COPY --from=web /app/apps/web/dist /app/apps/web/dist
 COPY --from=web-next /app/apps/web-next/dist /app/apps/web-next/dist
+COPY --from=widget /app/packages/widget/dist /app/packages/widget/dist
 # Runs as a user without rights to the image's files.
 RUN useradd --system --no-create-home app
 USER app
