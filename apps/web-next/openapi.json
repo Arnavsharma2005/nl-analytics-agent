@@ -1147,6 +1147,85 @@
         "title": "InsightsV1",
         "type": "object"
       },
+      "KeyRequestV1": {
+        "properties": {
+          "name": {
+            "description": "What the key is for, e.g. \"Sales dashboard\".",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "origins": {
+            "default": [],
+            "description": "Web origins allowed to use the key from a browser, e.g. [\"https://example.com\"]. Empty allows any.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Origins",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "KeyRequestV1",
+        "type": "object"
+      },
+      "KeyV1": {
+        "description": "An API key as listed: never the key itself.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "hint": {
+            "description": "The key's first characters, to tell keys apart.",
+            "title": "Hint",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "origins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Origins",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "hint",
+          "origins",
+          "created_at",
+          "last_used_at"
+        ],
+        "title": "KeyV1",
+        "type": "object"
+      },
       "MeV1": {
         "properties": {
           "user": {
@@ -1223,6 +1302,64 @@
           "created_at"
         ],
         "title": "MessageV1",
+        "type": "object"
+      },
+      "NewKeyV1": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "hint": {
+            "description": "The key's first characters, to tell keys apart.",
+            "title": "Hint",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "description": "The key. It is shown only this once: store it somewhere safe.",
+            "title": "Key",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "origins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Origins",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "hint",
+          "origins",
+          "created_at",
+          "last_used_at",
+          "key"
+        ],
+        "title": "NewKeyV1",
         "type": "object"
       },
       "ReportRequestV1": {
@@ -2567,6 +2704,109 @@
           }
         },
         "summary": "Insights",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/keys": {
+      "get": {
+        "description": "Your API keys that still work, oldest first, without the keys themselves.",
+        "operationId": "list_keys_v1_keys_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KeyV1"
+                  },
+                  "title": "Response List Keys V1 Keys Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Keys",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Make an API key. Send it as `Authorization: Bearer <key>` to ask as yourself, under your own question\nlimits. The key is in this response only: store it somewhere safe.",
+        "operationId": "create_key_v1_keys_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyRequestV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewKeyV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Key",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/keys/{key_id}": {
+      "delete": {
+        "description": "Revoke a key. Requests made with it are refused from now on.",
+        "operationId": "revoke_key_v1_keys__key_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Key",
         "tags": [
           "v1"
         ]
