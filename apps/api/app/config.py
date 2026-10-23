@@ -107,6 +107,12 @@ class Settings(BaseSettings):
     reports_per_day: int = 3
     # API keys (app/keys.py): signed-in users make keys to call /v1 from scripts, the SDKs and the widget.
     api_keys: bool = False
+    # A Telegram bot (app/telegram.py): the token from @BotFather and a secret of your choosing that Telegram sends
+    # back with every update (letters, digits, _ and - only). Both set turns it on; register the webhook with
+    # scripts/telegram_webhook.py.
+    telegram_bot_token: str | None = None
+    telegram_webhook_secret: str | None = None
+    telegram_charts: bool = True  # charts as QuickChart images; the figures go to quickchart.io in the URL
     # Embedding model for finding similar questions, on Cloudflare Workers AI (uses the CLOUDFLARE_* keys). Without
     # those keys, or with this empty, questions are compared by the words they share.
     embedding_model: str | None = "@cf/baai/bge-m3"
