@@ -1,11 +1,16 @@
 {
   "name": "nl-analytics-widget",
-  "version": "0.1.0",
-  "private": true,
+  "version": "2.3.0",
   "description": "<nl-analyst>: a web component that lets visitors ask the analytics agent questions on any site",
   "type": "module",
+  "files": ["dist"],
+  "exports": "./dist/nl-analyst.js",
+  "jsdelivr": "dist/nl-analyst.js",
+  "unpkg": "dist/nl-analyst.js",
+  "repository": { "type": "git", "url": "git+https://github.com/Arnavsharma2005/nl-analytics-agent.git", "directory": "packages/widget" },
   "scripts": {
     "build": "tsc --noEmit && esbuild src/widget.ts --bundle --minify --format=esm --target=es2022 --outfile=dist/nl-analyst.js",
+    "prepack": "npm run build",
     "test": "playwright test"
   },
   "devDependencies": {

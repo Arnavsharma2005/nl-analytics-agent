@@ -1,0 +1,119 @@
+name: Promote
+
+# Ships what is on main to production (DEPLOY.md, "Releasing"): Actions -> Promote -> Run workflow, with the new
+# version. It checks main's CI passed on that commit, tags it vX.Y.Z with a GitHub release whose notes list the merged
+# pull requests, fast-forwards the `release` branch to it (Render deploys production from `release`), starts the
+# Release workflow on the tag (the self-host image and the packages), and then smoke-tests production.
+#
+# The smoke test waits for production's /healthz to report the new commit, checks /readyz, and, with the
+# SMOKE_API_KEY secret (an API key from /keys on production) in the "production" environment, asks two questions.
+# Ways back: turn the feature's flag off (Flags workflow), roll back in Render, or promote an earlier tag with
+# `git push origin vX.Y.Z:release --force` from your machine.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The new version, e.g. 2.4.0 (major for breaking API changes, minor for features, patch for fixes)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
+env:
+  PRODUCTION_URL: https://nl-analytics-agent.onrender.com
+
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write  # the tag, the release and the release branch
+      actions: write  # starts the Release workflow
+      checks: read
+    outputs:
+      sha: ${{ steps.check.outputs.sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check the version and main's CI
+        id: check
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Use a version like 2.4.0"; exit 1; }
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::v$VERSION is already a tag"; exit 1
+          fi
+          last=$(git describe --tags --abbrev=0 --match 'v*.*.*' 2>/dev/null || echo v0.0.0)
+          if [ "$(printf '%s\n%s\n' "${last#v}" "$VERSION" | sort -V | tail -1)" != "$VERSION" ] || [ "v$VERSION" = "$last" ]; then
+            echo "::error::v$VERSION is not after the last release, $last"; exit 1
+          fi
+          sha=$(git rev-parse HEAD)
+          ci=$(gh run list --workflow ci.yml --commit "$sha" --event push --json conclusion --jq '.[0].conclusion // "none"')
+          if [ "$ci" != "success" ]; then
+            echo "::error::CI on main's latest commit ($sha) is '$ci', not success. Wait for it or fix main first."; exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Tag it and publish the release notes
+        run: gh release create "v$VERSION" --target "${{ steps.check.outputs.sha }}" --title "v$VERSION" --generate-notes
+      - name: Fast-forward the release branch (Render deploys production from it)
+        run: |
+          if git ls-remote --exit-code --heads origin release >/dev/null; then
+            git fetch origin release
+            git merge-base --is-ancestor origin/release "${{ steps.check.outputs.sha }}" \
+              || { echo "::error::release has commits main lacks; promote cannot fast-forward it"; exit 1; }
+          fi
+          git push origin "${{ steps.check.outputs.sha }}:refs/heads/release"
+      - name: Start the Release workflow on the tag
+        run: gh workflow run release.yml --ref "v$VERSION"
+
+  smoke:
+    needs: promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    env:
+      SHA: ${{ needs.promote.outputs.sha }}
+      SMOKE_API_KEY: ${{ secrets.SMOKE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Wait for production to run the new commit
+        run: |
+          for _ in $(seq 1 60); do  # up to 20 minutes: a free Render build plus a cold start
+            live=$(curl -fsS --max-time 60 "$PRODUCTION_URL/healthz" | jq -r '.commit // ""' || true)
+            if [ "$live" = "$SHA" ]; then echo "production runs $SHA"; exit 0; fi
+            echo "production runs '${live:-nothing yet}', waiting for $SHA"; sleep 20
+          done
+          echo "::error::Production did not start $SHA in 20 minutes. Check the deploy in Render."; exit 1
+      - name: Ready
+        run: curl -fsS --max-time 60 "$PRODUCTION_URL/readyz" | jq -e '.status == "ok"'
+      - uses: actions/setup-python@v6
+        if: env.SMOKE_API_KEY != ''
+        with:
+          python-version: "3.12"
+      - name: Ask two questions with the Python SDK
+        if: env.SMOKE_API_KEY != ''
+        run: |
+          pip install ./packages/sdk-py
+          python - <<'PY'
+          import os
+          from nl_analytics import Analyst
+
+          with Analyst(os.environ["PRODUCTION_URL"], api_key=os.environ["SMOKE_API_KEY"], timeout=120) as analyst:
+              chat = analyst.conversation()
+              for question in ("Total revenue by region", "and only for 2025?"):
+                  answer = chat.ask(question).answer
+                  assert not answer.error and answer.rows, f"{question!r} got no result: {answer.error or answer.answer}"
+                  print(f"ok: {question!r} -> {len(answer.rows)} rows")
+          PY
+      - name: No API key for questions
+        if: env.SMOKE_API_KEY == ''
+        run: echo "::notice::Set SMOKE_API_KEY in the production environment to also ask two questions."

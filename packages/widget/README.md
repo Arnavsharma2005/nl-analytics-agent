@@ -9,6 +9,9 @@ ones. About 9 KB, no dependencies, light and dark schemes, keyboard and screen-r
 <nl-analyst base-url="https://nl-analytics-agent.onrender.com" api-key="aak_..." heading="Ask our sales data"></nl-analyst>
 ```
 
+Each app release also publishes it to npm as `nl-analytics-widget`, so it can be loaded from jsDelivr at a fixed
+version: `https://cdn.jsdelivr.net/npm/nl-analytics-widget@2/dist/nl-analyst.js`.
+
 Make the key at `/keys` on the app with the site's origin listed (e.g. `https://example.com`): the API refuses
 the key from any other site. Anyone who views the page can read the key, so its questions count against your
 limits. Colours can be set on the element with `--nl-accent`, `--nl-ink`, `--nl-muted`, `--nl-surface`,

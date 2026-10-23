@@ -125,9 +125,17 @@ jobs:
           cache-dependency-path: packages/sdk-ts/package-lock.json
       - run: npm ci
       - name: Types generated from the OpenAPI spec are up to date
-        run: npm run gen && git diff --exit-code src/schema.d.ts
+        run: npm run gen && git diff --exit-code src/schema.ts
       - run: npm run typecheck
       - run: npm test
+      - name: The package as published imports and type-checks
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/consumer" && cd "$RUNNER_TEMP/consumer"
+          npm init -y >/dev/null && npm install "$RUNNER_TEMP"/nl-analytics-sdk-*.tgz typescript@5.9.3 @types/node@22.20.5
+          printf 'import { Analyst } from "nl-analytics-sdk";\nconst a: Analyst = new Analyst({ baseUrl: "http://x" });\nconsole.log(typeof a.ask);\n' > check.mts
+          npx tsc --noEmit --strict --module nodenext --moduleResolution nodenext check.mts
+          node -e 'import("nl-analytics-sdk").then((m) => { if (typeof m.Analyst !== "function") process.exit(1); })'
 
   widget:
     runs-on: ubuntu-latest
