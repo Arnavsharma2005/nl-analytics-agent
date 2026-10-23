@@ -36,6 +36,7 @@ export function message(id: string, conversation: string, question = "Revenue by
       ],
       cached: false,
       verified_question: null,
+      sql_prompt: "v1",
       assumptions: ["revenue means completed orders only"],
       summary_verified: true,
       analysis: null,

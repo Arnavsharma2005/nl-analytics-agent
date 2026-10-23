@@ -1,3 +1,4 @@
 -r requirements.txt
 pytest==9.1.1
 ruff==0.17.1
+gepa==0.1.4  # eval/optimize_prompt.py, tested in tests/test_prompts.py

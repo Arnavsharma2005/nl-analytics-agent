@@ -1,0 +1,2 @@
+# What the offline jobs in eval/ need beyond the API's own requirements.
+gepa==0.1.4

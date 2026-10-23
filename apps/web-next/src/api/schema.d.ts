@@ -708,6 +708,11 @@ export interface components {
             rows: unknown[][];
             /** Sql */
             sql: string | null;
+            /**
+             * Sql Prompt
+             * @description The version of the SQL writer's prompt that wrote the SQL (semantic/prompts/); none when no SQL was written by the model.
+             */
+            sql_prompt: string | null;
             /** Sql Reasoning */
             sql_reasoning: string | null;
             /**

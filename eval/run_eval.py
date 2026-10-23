@@ -98,6 +98,7 @@ def main() -> int:
         return 1 if bad else 0
 
     from app import semantic
+    from app.agents.sql_agent import SQLPrompt
     from app.analyst import Analyst
     from app.confidence import load_model
     from app.context import Context
@@ -116,7 +117,7 @@ def main() -> int:
                 "check_results": settings.check_results, "check_summaries": settings.check_summaries}
     analyst = Analyst(llm, db, max_attempts=settings.max_sql_attempts, rows_for_llm=settings.rows_for_llm,
                       context=context, check_results=settings.check_results, check_summaries=settings.check_summaries,
-                      confidence=load_model())
+                      confidence=load_model(), sql_prompt=SQLPrompt.load(settings.sql_prompt))
 
     results = []
     history: dict[int, list] = defaultdict(list)  # earlier turns of each conversation, as the app keeps them
@@ -171,6 +172,7 @@ def main() -> int:
         "set": "conversations" if args.conversations else "questions",
         "providers_configured": providers,
         "features": [name for name, on in features.items() if on],
+        "sql_prompt": settings.sql_prompt,
         "sql_written_by": dict(Counter(r["sql_provider"] for r in results if r["sql_provider"])),
         "run_at": run_at.isoformat(timespec="seconds"),
         "commit": commit,
