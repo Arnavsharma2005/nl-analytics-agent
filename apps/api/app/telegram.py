@@ -34,7 +34,8 @@ MAX_URL = 4000
 CELL = 24  # characters per table cell
 
 HELP = ("Ask me about the sales data in plain words, for example <i>Revenue by region in 2025</i>. "
-        "Follow-ups like <i>and in 2024?</i> are understood with your last questions. /new starts over.")
+        "Follow-ups like <i>and in 2024?</i> are understood with your last questions. /new starts over, and /id "
+        "shows this chat's id for scheduled reports and alerts.")
 
 
 class TelegramClient:
@@ -42,16 +43,19 @@ class TelegramClient:
         self._base = f"{API}/bot{token}"
         self._post = post or httpx.post
 
-    def call(self, method: str, **params) -> None:
+    def call(self, method: str, **params) -> bool:
+        """Whether Telegram took the call; a failure is logged, not raised."""
         try:
             r = self._post(f"{self._base}/{method}", json=params, timeout=20)
             if r.status_code >= 400:
                 log.warning("Telegram %s failed: %s %s", method, r.status_code, r.text[:300])
+            return r.status_code < 400
         except httpx.HTTPError as e:
             log.warning("Telegram %s failed: %s", method, e)
+            return False
 
-    def send_message(self, chat_id: int, text: str) -> None:
-        self.call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML", link_preview_options={"is_disabled": True})
+    def send_message(self, chat_id: int, text: str) -> bool:
+        return self.call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML", link_preview_options={"is_disabled": True})
 
     def send_photo(self, chat_id: int, url: str, caption: str) -> None:
         self.call("sendPhoto", chat_id=chat_id, photo=url, caption=caption[:1000])
@@ -137,6 +141,9 @@ class TelegramBot:
         command = text.split()[0].split("@")[0].lower() if text.startswith("/") else None
         if command in ("/start", "/help"):
             return self._client.send_message(chat_id, HELP)
+        if command == "/id":
+            return self._client.send_message(chat_id, f"This chat's id is <code>{chat_id}</code>. Use it as the "
+                                                      "recipient of a scheduled report or alert.")
         if command == "/new":
             self._epochs[chat_id] = self._epochs.get(chat_id, 0) + 1
             return self._client.send_message(chat_id, "Starting a new conversation. What would you like to know?")

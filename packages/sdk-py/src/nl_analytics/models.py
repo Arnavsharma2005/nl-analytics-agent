@@ -6,7 +6,16 @@ from datetime import date
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, Field, constr
+from pydantic import AwareDatetime, BaseModel, Field, conint, constr
+
+
+class AlertV1(BaseModel):
+    op: Literal['>', '>=', '<', '<='] = Field(..., title='Op')
+    value: float = Field(
+        ...,
+        description="Send when the answer's number compared with this holds.",
+        title='Value',
+    )
 
 
 class AskRequest(BaseModel):
@@ -327,6 +336,54 @@ class ReviewV1(BaseModel):
         description='Approve under this wording instead of the question as understood.',
         title='Question',
     )
+
+
+class ScheduleRequestV1(BaseModel):
+    alert: AlertV1 | None = Field(
+        None, description='Required for an alert, absent for a report.'
+    )
+    channel: Literal['email', 'telegram'] = Field(..., title='Channel')
+    every: Literal['day', 'week'] | None = Field('day', title='Every')
+    hour_utc: conint(ge=0, le=23) | None = Field(
+        3, description='When to run, as an hour of the day in UTC.', title='Hour Utc'
+    )
+    kind: Literal['report', 'alert'] | None = Field('report', title='Kind')
+    question: constr(min_length=3, max_length=500) = Field(
+        ...,
+        description='For an alert, a question with one number as its answer, e.g. "Revenue yesterday".',
+        title='Question',
+    )
+    to: constr(min_length=1, max_length=254) = Field(
+        ...,
+        description="An email address, or a Telegram chat id (the bot's /id command shows it).",
+        title='To',
+    )
+    weekday: conint(ge=0, le=6) | None = Field(
+        0, description='For weekly schedules: 0 is Monday.', title='Weekday'
+    )
+
+
+class ScheduleV1(BaseModel):
+    alert: AlertV1 | None = None
+    channel: Literal['email', 'telegram'] = Field(..., title='Channel')
+    created_at: AwareDatetime = Field(..., title='Created At')
+    every: Literal['day', 'week'] = Field(..., title='Every')
+    hour_utc: int = Field(..., title='Hour Utc')
+    id: UUID = Field(..., title='Id')
+    kind: Literal['report', 'alert'] = Field(..., title='Kind')
+    last_run_at: AwareDatetime | None = Field(..., title='Last Run At')
+    last_status: str | None = Field(
+        ...,
+        description='"sent", "quiet" (an alert that did not fire) or what went wrong.',
+        title='Last Status',
+    )
+    last_value: float | None = Field(
+        ..., description="An alert's number at its last run.", title='Last Value'
+    )
+    next_run_at: AwareDatetime = Field(..., title='Next Run At')
+    question: str = Field(..., title='Question')
+    to: str = Field(..., title='To')
+    weekday: int = Field(..., title='Weekday')
 
 
 class SectionV1(BaseModel):
