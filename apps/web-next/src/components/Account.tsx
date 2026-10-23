@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getConversation, getMe, listConversations, signInUrl, signOut } from "../api/account";
 import { getDataset } from "../api/datasets";
+import { getConfig } from "../api/session";
 import { ApiError } from "../api/http";
 import type { ConversationSummary, Message, User } from "../api/types";
 import type { Subject } from "../conversation";
@@ -46,6 +47,7 @@ function History({ user, current, onOpen, onClose }: HistoryProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const queryClient = useQueryClient();
   const conversations = useQuery({ queryKey: ["conversations"], queryFn: listConversations, staleTime: 0 });
+  const config = useQuery({ queryKey: ["config"], queryFn: getConfig, staleTime: Infinity });
   const opening = useMutation({
     mutationFn: (c: ConversationSummary) => Promise.all([getConversation(c.id), about(c.dataset_id)]),
     onSuccess: ([messages, subject], c) => {
@@ -110,7 +112,10 @@ function History({ user, current, onOpen, onClose }: HistoryProps) {
         </ul>
       )}
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center justify-end gap-2">
+        {config.data?.features.api_keys && (
+          <a href="/keys" className="rounded-md px-3 py-1.5 text-sm hover:bg-rule/60">API keys</a>
+        )}
         <button
           type="button"
           onClick={() => leave.mutate()}
