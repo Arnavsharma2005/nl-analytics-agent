@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.chart import ChartSpec
 from app.agents.followup import Turn
+from app.agents.learned_router import LearnedRouter
 from app.analysis.drivers import Drivers
 from app.brief import Brief, database
 from app.confidence import Confidence, ConfidenceModel, assess
@@ -189,17 +190,20 @@ class Analyst:
     names, and a verified query can answer a question outright. `check_results` and `check_summaries` turn on
     the checks in app.checks. With `drivers` (app.analysis.drivers), questions about why a metric changed are
     answered by driver analysis, and with `forecasting` questions about the future are forecast from their
-    history. Each of these is off unless given. A `confidence` model (app.confidence) scores each data answer;
+    history. A `learned_router` (app.agents.learned_router) classifies a question before the model router and
+    saves its call when sure. Each of these is off unless given. A `confidence` model (app.confidence) scores each data answer;
     without one, answers carry only the signals it would use.
     """
 
     def __init__(self, llm: LLM, source: DataSource, *, brief: Brief | None = None, max_attempts: int = 3,
                  rows_for_llm: int = 50, cache: Cache | None = None, context: Context | None = None,
                  check_results: bool = False, check_summaries: bool = False, drivers: Drivers | None = None,
-                 forecasting: bool = False, confidence: ConfidenceModel | None = None):
+                 forecasting: bool = False, confidence: ConfidenceModel | None = None,
+                 learned_router: LearnedRouter | None = None):
         self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm,
                                   brief=brief or database(), context=context, check_results=check_results,
-                                  check_summaries=check_summaries, drivers=drivers, forecasting=forecasting)
+                                  check_summaries=check_summaries, drivers=drivers, forecasting=forecasting,
+                                  learned_router=learned_router)
         self._cache = cache
         self._confidence = confidence
 

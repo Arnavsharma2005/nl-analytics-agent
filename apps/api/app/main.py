@@ -15,6 +15,7 @@ from sqlalchemy.engine import Engine
 from sse_starlette.sse import EventSourceResponse
 
 from app import semantic
+from app.agents.learned_router import LearnedRouter
 from app.analysis import drivers as driver_analysis
 from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
@@ -87,9 +88,10 @@ def get_analyst() -> Analyst:
     context = (Context(semantic.load(), db.schema(), build_embedder(s), fast_path=s.verified_fast_path)
                if s.context_retrieval else None)
     drivers = driver_analysis.load() if s.driver_analysis else None
+    router = LearnedRouter.load((s.semantic_dir or semantic.SEMANTIC_DIR) / "router.json") if s.learned_router else None
     switches = {"context": bool(context), "fast_path": bool(context) and s.verified_fast_path,
                 "check_results": s.check_results, "check_summaries": s.check_summaries, "drivers": bool(drivers),
-                "forecasting": s.forecasting}
+                "forecasting": s.forecasting, "learned_router": bool(router)}
     cache = None
     if s.answer_cache_ttl_s:
         # Answers depend on the build and on which features are on, so either changing starts a fresh cache.
@@ -97,7 +99,8 @@ def get_analyst() -> Analyst:
         cache = AnswerCache(get_app_engine(), version, s.answer_cache_ttl_s)
     return Analyst(get_llm(), db, max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm, cache=cache,
                    context=context, check_results=s.check_results, check_summaries=s.check_summaries,
-                   drivers=drivers, forecasting=s.forecasting, confidence=load_model())
+                   drivers=drivers, forecasting=s.forecasting, confidence=load_model(),
+                   learned_router=router)
 
 
 @lru_cache
