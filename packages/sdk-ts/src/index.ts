@@ -78,7 +78,9 @@ export class Analyst {
   private readonly fetch: typeof fetch;
 
   constructor(options: Options) {
-    this.base = options.baseUrl.replace(/\/+$/, "");
+    let base = options.baseUrl;
+    while (base.endsWith("/")) base = base.slice(0, -1);
+    this.base = base;
     this.headers = options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {};
     if (typeof window === "undefined") this.headers["User-Agent"] = USER_AGENT; // browsers set their own
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
