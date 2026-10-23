@@ -90,6 +90,14 @@ export default function Keys() {
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
+            {made.origins.length > 0 && (
+              <>
+                <p className="mt-4 text-sm text-muted">To put the chat widget on {made.origins.join(", ")}, add this to the page:</p>
+                <pre className="mt-2 overflow-x-auto rounded-md bg-surface p-3 font-mono text-xs leading-relaxed">
+                  {`<script type="module" src="${location.origin}/widget.js"></script>\n<nl-analyst base-url="${location.origin}" api-key="${made.key}"></nl-analyst>`}
+                </pre>
+              </>
+            )}
           </section>
         )}
 

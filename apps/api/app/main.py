@@ -41,6 +41,7 @@ from app.datasets.store import Datasets
 from app.db import Database
 from app.deep_analysis import Capabilities, DeepAnalysis
 from app.insights_feed import InsightsFeed, InsightsV1
+from app.key_cors import KeyCORS
 from app.keys import ApiKeys, KeyRefused
 from app.llm import FallbackLLM
 from app.messages import Messages
@@ -53,6 +54,8 @@ from app.transcribe import Transcriber
 from app.usage import Counters, DailyBudget, Quota, Visitor
 
 log = logging.getLogger(__name__)
+
+WIDGET = Path(__file__).resolve().parents[3] / "packages" / "widget" / "dist" / "nl-analyst.js"  # npm run build
 
 
 class AskRequest(BaseModel):
@@ -246,6 +249,8 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
 
     app = FastAPI(title="NL Business Analytics Agent", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
+    if settings.api_keys:
+        app.add_middleware(KeyCORS)  # outside the cookie CORS above, so it answers keyed requests first
     install(app)
 
     def client_ip(request: Request) -> str:
@@ -424,6 +429,13 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                 yield {"event": "error", "data": json.dumps({"error": problem.get("detail", problem["title"]), **problem})}
 
         return EventSourceResponse(events())
+
+    # The <nl-analyst> widget (packages/widget), for other sites to load: anyone may fetch it.
+    if settings.api_keys and WIDGET.exists():
+        @app.get("/widget.js", include_in_schema=False)
+        def widget_js():
+            return FileResponse(WIDGET, media_type="text/javascript",
+                                headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"})
 
     # In production the built React app is served from the same origin.
     dist = Path(__file__).resolve().parents[3] / "apps" / ("web-next" if settings.web_app == "next" else "web") / "dist"

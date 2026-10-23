@@ -224,7 +224,7 @@ Six switches, each off by default. Each is turned on only when the held-out eval
 | `DEEP_ANALYSIS` | Deep Analysis at `/reports`: a broad question is planned into two to eight specific questions, each answered by the full pipeline (with driver analysis and forecasting when they are on), and written up as a report whose sections cite their steps. Every figure in a section is checked against the cited steps' results; one that can't be traced is sent back once and then flagged. Signed-in users only, one at a time, `REPORTS_PER_DAY` each (default 3). Reports run in the background and are kept for 30 days. |
 | `API_KEYS` | Signed-in users make API keys at `/keys` (up to 5 each) and send one as `Authorization: Bearer aak_...` to call `/v1` from a script, an SDK or the widget, as themselves and within their own question limits. Only a hash of each key is stored, and a revoked key is refused on the next request. A key can list the sites allowed to use it from a browser; a browser request from any other origin gets `403 origin_not_allowed`. Requests without an `Origin` header (scripts) are not checked, so treat a key placed in a web page as public. |
 
-Clients for the API live in `packages/`: [`sdk-py`](packages/sdk-py) (Python) and [`sdk-ts`](packages/sdk-ts) (TypeScript, Node 22+ and browsers), both generated from the OpenAPI spec and checked against it in CI.
+Clients for the API live in `packages/`: [`sdk-py`](packages/sdk-py) (Python) and [`sdk-ts`](packages/sdk-ts) (TypeScript, Node 22+ and browsers), both generated from the OpenAPI spec and checked against it in CI. [`widget`](packages/widget) is a `<nl-analyst>` web component for asking questions from other sites, served at `/widget.js` when `API_KEYS` is on.
 
 ### Prompt versions and GEPA
 

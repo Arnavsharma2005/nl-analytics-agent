@@ -128,3 +128,22 @@ jobs:
         run: npm run gen && git diff --exit-code src/schema.d.ts
       - run: npm run typecheck
       - run: npm test
+
+  widget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: mcr.microsoft.com/playwright:v1.64.0-noble  # keep equal to @playwright/test in its package.json
+    defaults:
+      run:
+        working-directory: packages/widget
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/widget/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: The widget on a mocked site and API, with accessibility checks
+        run: npx playwright test
