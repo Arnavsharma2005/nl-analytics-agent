@@ -1,6 +1,6 @@
 /**
  * A client for the analytics agent's /v1 API: ask questions about the data (whole or streamed), read the weekly
- * insights, and run Deep Analysis reports. Types come from the API's OpenAPI spec (src/schema.d.ts, `npm run gen`).
+ * insights, and run Deep Analysis reports. Types come from the API's OpenAPI spec (src/schema.ts, `npm run gen`).
  *
  *   const analyst = new Analyst({ baseUrl: "https://nl-analytics-agent.onrender.com", apiKey: "aak_..." });
  *   const chat = analyst.conversation();
@@ -9,7 +9,7 @@
  *
  * Works in Node 22+ and browsers (anything with fetch). In a web page, use a key that lists the page's origin.
  */
-import type { components } from "./schema.d.ts";
+import type { components } from "./schema.ts";
 
 type Schemas = components["schemas"];
 export type Message = Schemas["MessageV1"];
@@ -27,7 +27,7 @@ export type StreamEvent =
   | { type: "token"; text: string; replace: boolean }
   | { type: "done"; message: Message };
 
-export const USER_AGENT = "nl-analytics-sdk-ts/0.1.0";
+export const USER_AGENT = "nl-analytics-sdk-ts/2.3.0";
 
 /** The API refused or failed a request. `code` is stable ("quota_exceeded", "invalid_api_key", ...). */
 export class ApiError extends Error {

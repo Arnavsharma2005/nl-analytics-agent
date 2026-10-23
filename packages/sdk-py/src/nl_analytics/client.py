@@ -23,7 +23,7 @@ import httpx
 
 from nl_analytics.models import InsightsV1, MessageV1, ReportStatusV1
 
-USER_AGENT = "nl-analytics-sdk-py/0.1.0"
+USER_AGENT = "nl-analytics-sdk-py/2.3.0"
 
 
 class ApiError(Exception):
