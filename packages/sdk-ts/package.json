@@ -1,0 +1,21 @@
+{
+  "name": "nl-analytics-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript client for the NL analytics agent's /v1 API",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "gen": "openapi-typescript ../../apps/web-next/openapi.json -o src/schema.d.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}
