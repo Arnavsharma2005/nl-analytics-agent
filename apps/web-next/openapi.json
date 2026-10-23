@@ -1225,6 +1225,157 @@
         "title": "MessageV1",
         "type": "object"
       },
+      "ReportRequestV1": {
+        "properties": {
+          "question": {
+            "description": "A broad question, e.g. \"How did Q4 go and where should we focus?\"",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "ReportRequestV1",
+        "type": "object"
+      },
+      "ReportStatusV1": {
+        "description": "A report: how far it has got, and the report itself once it is done.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportV1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage": {
+            "enum": [
+              "planning",
+              "planned",
+              "step",
+              "writing",
+              "done"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steps_done": {
+            "title": "Steps Done",
+            "type": "integer"
+          },
+          "steps_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many steps the plan has; none until it is planned.",
+            "title": "Steps Total"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "question",
+          "status",
+          "stage",
+          "steps_done",
+          "steps_total",
+          "report",
+          "error",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReportStatusV1",
+        "type": "object"
+      },
+      "ReportV1": {
+        "description": "A finished Deep Analysis report.",
+        "properties": {
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/SectionV1"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepV1"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question",
+          "title",
+          "summary",
+          "sections",
+          "steps"
+        ],
+        "title": "ReportV1",
+        "type": "object"
+      },
       "ReviewV1": {
         "properties": {
           "decision": {
@@ -1254,6 +1405,42 @@
           "decision"
         ],
         "title": "ReviewV1",
+        "type": "object"
+      },
+      "SectionV1": {
+        "properties": {
+          "heading": {
+            "title": "Heading",
+            "type": "string"
+          },
+          "steps": {
+            "description": "The steps (1-based) whose answers this section draws on.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "unsupported": {
+            "description": "Figures in the text that none of its steps' results hold; empty when every figure was traced.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported",
+            "type": "array"
+          }
+        },
+        "required": [
+          "heading",
+          "text",
+          "steps",
+          "unsupported"
+        ],
+        "title": "SectionV1",
         "type": "object"
       },
       "SessionRequest": {
@@ -1439,6 +1626,28 @@
           "subqueries"
         ],
         "title": "Signals",
+        "type": "object"
+      },
+      "StepV1": {
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/Answer"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question",
+          "purpose",
+          "answer"
+        ],
+        "title": "StepV1",
         "type": "object"
       },
       "TranscriptV1": {
@@ -2558,6 +2767,116 @@
           }
         },
         "summary": "Share",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/reports": {
+      "get": {
+        "description": "Your latest reports, newest first, without their bodies.",
+        "operationId": "list_reports_v1_reports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReportStatusV1"
+                  },
+                  "title": "Response List Reports V1 Reports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Reports",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Start a report on a broad question. It runs for a minute or two: poll GET /v1/reports/{id}. One report at\na time per user, and a few a day.",
+        "operationId": "start_v1_reports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRequestV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportStatusV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/reports/{report_id}": {
+      "get": {
+        "description": "A report: its progress while it runs, and the report once it is done.",
+        "operationId": "get_report_v1_reports__report_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportStatusV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Report",
         "tags": [
           "v1"
         ]

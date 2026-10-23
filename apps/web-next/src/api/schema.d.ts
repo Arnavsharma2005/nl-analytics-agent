@@ -583,6 +583,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reports
+         * @description Your latest reports, newest first, without their bodies.
+         */
+        get: operations["list_reports_v1_reports_get"];
+        put?: never;
+        /**
+         * Start
+         * @description Start a report on a broad question. It runs for a minute or two: poll GET /v1/reports/{id}. One report at
+         *     a time per user, and a few a day.
+         */
+        post: operations["start_v1_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Report
+         * @description A report: its progress while it runs, and the report once it is done.
+         */
+        get: operations["get_report_v1_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/session": {
         parameters: {
             query?: never;
@@ -1179,6 +1224,73 @@ export interface components {
              */
             suggestions: string[];
         };
+        /** ReportRequestV1 */
+        ReportRequestV1: {
+            /**
+             * Question
+             * @description A broad question, e.g. "How did Q4 go and where should we focus?"
+             */
+            question: string;
+        };
+        /**
+         * ReportStatusV1
+         * @description A report: how far it has got, and the report itself once it is done.
+         */
+        ReportStatusV1: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Question */
+            question: string;
+            report: components["schemas"]["ReportV1"] | null;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "planning" | "planned" | "step" | "writing" | "done";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "done" | "failed";
+            /** Steps Done */
+            steps_done: number;
+            /**
+             * Steps Total
+             * @description How many steps the plan has; none until it is planned.
+             */
+            steps_total: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ReportV1
+         * @description A finished Deep Analysis report.
+         */
+        ReportV1: {
+            /** Question */
+            question: string;
+            /** Sections */
+            sections: components["schemas"]["SectionV1"][];
+            /** Steps */
+            steps: components["schemas"]["StepV1"][];
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+        };
         /** ReviewV1 */
         ReviewV1: {
             /**
@@ -1191,6 +1303,23 @@ export interface components {
              * @description Approve under this wording instead of the question as understood.
              */
             question?: string | null;
+        };
+        /** SectionV1 */
+        SectionV1: {
+            /** Heading */
+            heading: string;
+            /**
+             * Steps
+             * @description The steps (1-based) whose answers this section draws on.
+             */
+            steps: number[];
+            /** Text */
+            text: string;
+            /**
+             * Unsupported
+             * @description Figures in the text that none of its steps' results hold; empty when every figure was traced.
+             */
+            unsupported: string[];
         };
         /** SessionRequest */
         SessionRequest: {
@@ -1297,6 +1426,14 @@ export interface components {
             verified: boolean;
             /** Window Functions */
             window_functions: boolean;
+        };
+        /** StepV1 */
+        StepV1: {
+            answer: components["schemas"]["Answer"];
+            /** Purpose */
+            purpose: string;
+            /** Question */
+            question: string;
         };
         /** TranscriptV1 */
         TranscriptV1: {
@@ -2160,6 +2297,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShareV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reports_v1_reports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportStatusV1"][];
+                };
+            };
+        };
+    };
+    start_v1_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRequestV1"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportStatusV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_report_v1_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportStatusV1"];
                 };
             };
             /** @description Validation Error */

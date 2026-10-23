@@ -105,6 +105,9 @@ export default function App() {
       <header className="flex items-center justify-between gap-4 py-4">
         <Brand />
         <div className="flex items-center gap-2">
+          {config.data?.features.reports && (
+            <a href="/reports" className="rounded-md px-2 py-1.5 text-sm hover:bg-rule/60">Deep Analysis</a>
+          )}
           <a href="/eval" className="rounded-md px-2 py-1.5 text-sm hover:bg-rule/60">Accuracy</a>
           {config.data?.features.sign_in && (
             <Account

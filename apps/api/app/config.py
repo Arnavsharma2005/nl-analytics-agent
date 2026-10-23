@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     # The SQL writer's prompt: semantic/prompts/sql_writer.<version>.md. Point it at a new version only after it beats
     # the current one on the held-out eval split (see eval/optimize_prompt.py).
     sql_prompt: str = "v1"
+    # Deep Analysis: a cited report from one broad question (app/deep_analysis.py), for signed-in users, this many a
+    # day each. Each report runs up to eight answers' worth of model calls.
+    deep_analysis: bool = False
+    reports_per_day: int = 3
     # Embedding model for finding similar questions, on Cloudflare Workers AI (uses the CLOUDFLARE_* keys). Without
     # those keys, or with this empty, questions are compared by the words they share.
     embedding_model: str | None = "@cf/baai/bge-m3"
