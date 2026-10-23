@@ -48,6 +48,7 @@ from app.key_cors import KeyCORS
 from app.keys import ApiKeys, KeyRefused
 from app.llm import FallbackLLM
 from app.messages import Messages
+from app.observability import get_tracing, init_sentry
 from app.problems import Problem, from_exception, install
 from app.providers import build_embedder, build_llm
 from app.reports import Reports
@@ -148,7 +149,7 @@ def _analyst(on: frozenset[str]) -> Analyst:
                    context=context, check_results=switches["check_results"],
                    check_summaries=switches["check_summaries"], drivers=drivers,
                    forecasting=switches["forecasting"], confidence=load_model(), learned_router=router,
-                   sql_prompt=SQLPrompt.load(s.sql_prompt))
+                   sql_prompt=SQLPrompt.load(s.sql_prompt), callbacks=get_tracing().callbacks())
 
 
 @lru_cache
@@ -287,6 +288,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                schedules_factory=get_schedules, notifier_factory=get_notifier, flags_factory=get_flags) -> FastAPI:
     """`analyst_factory` takes the flags on for a visitor (app/flags.py), or none for the ones on for everyone."""
     settings = get_settings()
+    init_sentry(settings)
 
     mcp = None  # the MCP server, made below once `spend` exists
 

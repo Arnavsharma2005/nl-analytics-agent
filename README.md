@@ -339,6 +339,17 @@ single provider, e.g. `LLM_PROVIDERS=groq python eval/run_eval.py`.
 | --- | --- | --- |
 | _fill in from your run_ | | |
 
+## Errors and traces
+
+Both are off until their keys are set (`apps/api/app/observability.py`).
+
+- **Sentry** (`SENTRY_DSN`): unhandled errors and every error logged (a provider failing, the message store down, a
+  schedule that could not send), tagged with the commit and `APP_ENV` (`production`, `staging`). Request bodies,
+  cookies and IP addresses are not sent. `SENTRY_TRACES_SAMPLE_RATE` (0 to 1) adds performance traces.
+- **Langfuse** (`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`): a trace of every answer on the sample
+  data, with each step of the pipeline and each model call's prompt, output, time and tokens.
+  `LANGFUSE_SAMPLE_RATE` keeps a share of them. Answers about uploaded files are never traced.
+
 ## Usage limits
 
 The public demo runs on free model quotas, so it protects them:

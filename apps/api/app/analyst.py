@@ -197,20 +197,23 @@ class Analyst:
     answered by driver analysis, and with `forecasting` questions about the future are forecast from their
     history. A `learned_router` (app.agents.learned_router) classifies a question before the model router and
     saves its call when sure. `sql_prompt` picks the SQL writer's prompt version (default v1). Each of these is off unless given. A `confidence` model (app.confidence) scores each data answer;
-    without one, answers carry only the signals it would use.
+    without one, answers carry only the signals it would use. `callbacks` (LangChain callback handlers, such as
+    app.observability's tracer) see every step and model call of each answer.
     """
 
     def __init__(self, llm: LLM, source: DataSource, *, brief: Brief | None = None, max_attempts: int = 3,
                  rows_for_llm: int = 50, cache: Cache | None = None, context: Context | None = None,
                  check_results: bool = False, check_summaries: bool = False, drivers: Drivers | None = None,
                  forecasting: bool = False, confidence: ConfidenceModel | None = None,
-                 learned_router: LearnedRouter | None = None, sql_prompt: SQLPrompt | None = None):
+                 learned_router: LearnedRouter | None = None, sql_prompt: SQLPrompt | None = None,
+                 callbacks: list | None = None):
         self._graph = build_graph(llm, source, max_attempts=max_attempts, rows_for_llm=rows_for_llm,
                                   brief=brief or database(), context=context, check_results=check_results,
                                   check_summaries=check_summaries, drivers=drivers, forecasting=forecasting,
                                   learned_router=learned_router, sql_prompt=sql_prompt)
         self._cache = cache
         self._confidence = confidence
+        self._config = {"callbacks": callbacks, "run_name": "answer"} if callbacks else None
 
     def ask(self, question: str, history: list[Turn] | None = None) -> Answer:
         """Answer one question. `history` holds the earlier turns of its conversation, oldest first: a follow-up
@@ -218,7 +221,7 @@ class Analyst:
         question = question.strip()
         if self._cache and not history and (hit := self._cache.get(question)):
             return hit
-        answer = Answer.from_state(self._graph.invoke(self._input(question, history)), self._confidence)
+        answer = Answer.from_state(self._graph.invoke(self._input(question, history), self._config), self._confidence)
         if self._cache:
             self._cache.put(*self._cache_entry(answer))
         return answer
@@ -253,7 +256,8 @@ class Analyst:
             return
         final: dict[str, Any] = {}
         modes = ["updates", "values", "custom"]
-        async for mode, chunk in self._graph.astream(self._input(question, history), stream_mode=modes):
+        async for mode, chunk in self._graph.astream(self._input(question, history), self._config,
+                                                   stream_mode=modes):
             if mode == "updates":
                 for node, update in chunk.items():
                     yield Step(node, STEP_LABELS.get(node, node))
