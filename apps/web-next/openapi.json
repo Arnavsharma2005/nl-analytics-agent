@@ -160,6 +160,18 @@
             ],
             "title": "Sql"
           },
+          "sql_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version of the SQL writer's prompt that wrote the SQL (semantic/prompts/); none when no SQL was written by the model.",
+            "title": "Sql Prompt"
+          },
           "sql_reasoning": {
             "anyOf": [
               {
@@ -249,6 +261,7 @@
           "timings",
           "llm_calls",
           "cached",
+          "sql_prompt",
           "verified_question",
           "assumptions",
           "summary_verified",

@@ -1,24 +1,53 @@
+import re
+from dataclasses import dataclass
+from functools import cache
+from pathlib import Path
+
 from pydantic import BaseModel, Field
 
 from app.brief import Brief
 from app.llm import LLM
 
-SYSTEM = """You are an expert {dialect} analyst. Write ONE read-only {dialect} SELECT query that answers
-the user's question over the schema below.
+PROMPTS_DIR = Path(__file__).resolve().parents[2] / "semantic" / "prompts"
+PLACEHOLDERS = ("{dialect}", "{schema}", "{rules}", "{time_column}")
 
-SCHEMA
-{schema}
 
-BUSINESS RULES
-{rules}
+class PromptError(ValueError):
+    """A prompt file that is missing or cannot be filled in."""
 
-STYLE
-- Return human-readable labels (region, category, product or customer names), never bare ids.
-- Give every computed column a short snake_case alias, e.g. revenue, order_count, month.
-- For time series, group by date_trunc('month' | 'quarter' | 'week', {time_column})::date and order by it ascending.
-- Round money and percentages with ROUND(x::numeric, 2). Use NULLIF to avoid division by zero.
-- For "top N" / "bottom N" questions, ORDER BY the measure and LIMIT N; when no N is given use 10.
-- Use only the tables and columns in the schema. No SELECT *. Do not end with a semicolon."""
+
+@dataclass(frozen=True)
+class SQLPrompt:
+    """The SQL writer's system prompt, one version of semantic/prompts/sql_writer.vN.md.
+
+    Versions are files, never edited once used: a new prompt (by hand or from eval/optimize_prompt.py) is a new
+    version, measured on the held-out eval split before SQL_PROMPT points at it. Every answer records the version."""
+
+    version: str
+    text: str
+
+    def __post_init__(self):
+        if missing := [p for p in PLACEHOLDERS if p not in self.text]:
+            raise PromptError(f"SQL prompt {self.version} lacks {', '.join(missing)}")
+        try:
+            self.text.format(dialect="", schema="", rules="", time_column="")
+        except (KeyError, IndexError, ValueError) as e:
+            raise PromptError(f"SQL prompt {self.version} has braces other than its placeholders ({e}); "
+                              "write a literal brace as {{ or }}") from e
+
+    @classmethod
+    def load(cls, version: str = "v1", directory: Path = PROMPTS_DIR) -> "SQLPrompt":
+        if not re.fullmatch(r"v\d+", version):
+            raise PromptError(f"a prompt version looks like v1 or v12, not {version!r}")
+        path = directory / f"sql_writer.{version}.md"
+        if not path.is_file():
+            raise PromptError(f"there is no SQL prompt {version} ({path})")
+        return cls(version, path.read_text().rstrip("\n"))
+
+
+@cache
+def default_prompt() -> SQLPrompt:
+    return SQLPrompt.load("v1")
 
 
 class SQLDraft(BaseModel):
@@ -43,11 +72,11 @@ DIALECTS = {"postgres": "PostgreSQL", "duckdb": "DuckDB"}
 
 
 def write_sql(llm: LLM, question: str, schema_text: str, previous: list[tuple[str, str]], brief: Brief,
-              dialect: str = "postgres", context: str | None = None) -> SQLDraft:
+              dialect: str = "postgres", context: str | None = None, prompt: SQLPrompt | None = None) -> SQLDraft:
     """`previous` holds (sql, error) for earlier attempts that failed validation or execution. `dialect` is the
     data source's (see app.db.DataSource). `context`, when given (even empty), is the question's context from
-    app.context and asks for a `ContextualSQLDraft`."""
-    system = SYSTEM.format(dialect=DIALECTS[dialect], schema=schema_text, rules=brief.rules,
+    app.context and asks for a `ContextualSQLDraft`. `prompt` is the system prompt's version (default v1)."""
+    system = (prompt or default_prompt()).text.format(dialect=DIALECTS[dialect], schema=schema_text, rules=brief.rules,
                            time_column=brief.time_column)
     user = f"Question: {question}"
     if context:

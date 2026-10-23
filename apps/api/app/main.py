@@ -16,6 +16,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app import semantic
 from app.agents.learned_router import LearnedRouter
+from app.agents.sql_agent import SQLPrompt
 from app.analysis import drivers as driver_analysis
 from app.analyst import Analyst, Answer, Done, Step
 from app.answer_cache import AnswerCache
@@ -91,7 +92,7 @@ def get_analyst() -> Analyst:
     router = LearnedRouter.load((s.semantic_dir or semantic.SEMANTIC_DIR) / "router.json") if s.learned_router else None
     switches = {"context": bool(context), "fast_path": bool(context) and s.verified_fast_path,
                 "check_results": s.check_results, "check_summaries": s.check_summaries, "drivers": bool(drivers),
-                "forecasting": s.forecasting, "learned_router": bool(router)}
+                "forecasting": s.forecasting, "learned_router": bool(router), f"prompt_{s.sql_prompt}": s.sql_prompt != "v1"}
     cache = None
     if s.answer_cache_ttl_s:
         # Answers depend on the build and on which features are on, so either changing starts a fresh cache.
@@ -100,7 +101,7 @@ def get_analyst() -> Analyst:
     return Analyst(get_llm(), db, max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm, cache=cache,
                    context=context, check_results=s.check_results, check_summaries=s.check_summaries,
                    drivers=drivers, forecasting=s.forecasting, confidence=load_model(),
-                   learned_router=router)
+                   learned_router=router, sql_prompt=SQLPrompt.load(s.sql_prompt))
 
 
 @lru_cache

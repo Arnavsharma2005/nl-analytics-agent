@@ -28,7 +28,7 @@ from app.agents.followup import Turn, standalone
 from app.agents.learned_router import LearnedRouter
 from app.agents.projection import read_projection
 from app.agents.router import answer_schema_question, route
-from app.agents.sql_agent import write_sql
+from app.agents.sql_agent import SQLPrompt, default_prompt, write_sql
 from app.agents.summary import stream_summary, summarize
 from app.agents.why import Unreadable, read_why
 from app.analysis import drivers as driver_analysis
@@ -63,6 +63,7 @@ class AnalyticsState(TypedDict, total=False):
     failures: list[dict[str, str]]  # earlier attempts: {"sql", "error", "stage"}
     context: ContextPack
     verified_question: str  # the verified query used instead of the SQL agent
+    sql_prompt: str  # the version of the SQL writer's prompt that wrote the SQL
     assumptions: list[str]
     result_checked: bool
     summary_verified: bool
@@ -119,11 +120,12 @@ def _series(columns: list[str], rows: list[list[Any]]) -> tuple[str, str]:
 def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: int = 50, *, brief: Brief,
                 context: Context | None = None, check_results: bool = False, check_summaries: bool = False,
                 drivers: Drivers | None = None, forecasting: bool = False,
-                learned_router: LearnedRouter | None = None):
+                learned_router: LearnedRouter | None = None, sql_prompt: SQLPrompt | None = None):
     schema = db.schema()
     schema_text = schema.describe()
     table_names = sorted(schema.tables)
     personal_columns = schema.personal_columns()
+    sql_prompt = sql_prompt or default_prompt()
     intents = (["data_query", "schema_question", "out_of_scope"] + (["why_change"] if drivers is not None else [])
                + (["forecast"] if forecasting else []))
 
@@ -166,9 +168,10 @@ def build_graph(llm: LLM, db: DataSource, max_attempts: int = 3, rows_for_llm: i
         previous = [(f["sql"], f["error"]) for f in state.get("failures", [])]
         pack = state.get("context")
         draft = write_sql(llm, state.get("sql_question") or state["question"], schema_text, previous, brief, db.dialect,
-                          pack.prompt_text() if pack else None)
+                          pack.prompt_text() if pack else None, sql_prompt)
         return {"sql": draft.sql, "sql_reasoning": draft.reasoning, "sql_attempts": state.get("sql_attempts", 0) + 1,
-                "assumptions": getattr(draft, "assumptions", []), "verified_question": None}
+                "assumptions": getattr(draft, "assumptions", []), "verified_question": None,
+                "sql_prompt": sql_prompt.version}
 
     @timed("validate")
     def validate_node(state: AnalyticsState):

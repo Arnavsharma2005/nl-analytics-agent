@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     # Classify a question with the model in semantic/router.json (eval/train_router.py) before asking the LLM, and skip
     # the LLM's call when that model is at least 90% sure. Off without the file.
     learned_router: bool = False
+    # The SQL writer's prompt: semantic/prompts/sql_writer.<version>.md. Point it at a new version only after it beats
+    # the current one on the held-out eval split (see eval/optimize_prompt.py).
+    sql_prompt: str = "v1"
     # Embedding model for finding similar questions, on Cloudflare Workers AI (uses the CLOUDFLARE_* keys). Without
     # those keys, or with this empty, questions are compared by the words they share.
     embedding_model: str | None = "@cf/baai/bge-m3"
