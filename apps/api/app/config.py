@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     # day each. Each report runs up to eight answers' worth of model calls.
     deep_analysis: bool = False
     reports_per_day: int = 3
+    # API keys (app/keys.py): signed-in users make keys to call /v1 from scripts, the SDKs and the widget.
+    api_keys: bool = False
     # Embedding model for finding similar questions, on Cloudflare Workers AI (uses the CLOUDFLARE_* keys). Without
     # those keys, or with this empty, questions are compared by the words they share.
     embedding_model: str | None = "@cf/baai/bge-m3"

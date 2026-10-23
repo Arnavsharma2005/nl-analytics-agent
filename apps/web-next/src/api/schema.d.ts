@@ -485,6 +485,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Keys
+         * @description Your API keys that still work, oldest first, without the keys themselves.
+         */
+        get: operations["list_keys_v1_keys_get"];
+        put?: never;
+        /**
+         * Create Key
+         * @description Make an API key. Send it as `Authorization: Bearer <key>` to ask as yourself, under your own question
+         *     limits. The key is in this response only: store it somewhere safe.
+         */
+        post: operations["create_key_v1_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Key
+         * @description Revoke a key. Requests made with it are refused from now on.
+         */
+        delete: operations["revoke_key_v1_keys__key_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -1186,6 +1231,47 @@ export interface components {
              */
             week_start: string | null;
         };
+        /** KeyRequestV1 */
+        KeyRequestV1: {
+            /**
+             * Name
+             * @description What the key is for, e.g. "Sales dashboard".
+             */
+            name: string;
+            /**
+             * Origins
+             * @description Web origins allowed to use the key from a browser, e.g. ["https://example.com"]. Empty allows any.
+             * @default []
+             */
+            origins: string[];
+        };
+        /**
+         * KeyV1
+         * @description An API key as listed: never the key itself.
+         */
+        KeyV1: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Hint
+             * @description The key's first characters, to tell keys apart.
+             */
+            hint: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Origins */
+            origins: string[];
+        };
         /** MeV1 */
         MeV1: {
             user: components["schemas"]["UserV1"] | null;
@@ -1223,6 +1309,35 @@ export interface components {
              * @description Follow-up questions worth asking next.
              */
             suggestions: string[];
+        };
+        /** NewKeyV1 */
+        NewKeyV1: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Hint
+             * @description The key's first characters, to tell keys apart.
+             */
+            hint: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Key
+             * @description The key. It is shown only this once: store it somewhere safe.
+             */
+            key: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Origins */
+            origins: string[];
         };
         /** ReportRequestV1 */
         ReportRequestV1: {
@@ -2160,6 +2275,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InsightsV1"];
+                };
+            };
+        };
+    };
+    list_keys_v1_keys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyV1"][];
+                };
+            };
+        };
+    };
+    create_key_v1_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyRequestV1"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewKeyV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_key_v1_keys__key_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

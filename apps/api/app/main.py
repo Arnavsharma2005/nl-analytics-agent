@@ -23,6 +23,7 @@ from app.answer_cache import AnswerCache
 from app.api_auth import auth_router, is_https, signed_in_user
 from app.api_curator import curator_router
 from app.api_datasets import datasets_router
+from app.api_keys import keys_router
 from app.api_mcp import mcp_route, mcp_server
 from app.api_reports import reports_router
 from app.api_shares import shares_router
@@ -40,6 +41,7 @@ from app.datasets.store import Datasets
 from app.db import Database
 from app.deep_analysis import Capabilities, DeepAnalysis
 from app.insights_feed import InsightsFeed, InsightsV1
+from app.keys import ApiKeys, KeyRefused
 from app.llm import FallbackLLM
 from app.messages import Messages
 from app.problems import Problem, from_exception, install
@@ -176,6 +178,11 @@ def get_deep_analysis() -> DeepAnalysis:
 
 
 @lru_cache
+def get_api_keys() -> ApiKeys:
+    return ApiKeys(get_app_engine())
+
+
+@lru_cache
 def get_curation() -> Curation:
     return Curation(get_app_engine(), semantic.load())
 
@@ -220,7 +227,8 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                datasets_factory=get_datasets, dataset_analysts_factory=get_dataset_analysts,
                shares_factory=get_shares, sheets_factory=SheetsClient, curation_factory=get_curation,
                library_pr_factory=get_library_pr, insights_factory=get_insights,
-               reports_factory=get_reports, deep_analysis_factory=get_deep_analysis) -> FastAPI:
+               reports_factory=get_reports, deep_analysis_factory=get_deep_analysis,
+               api_keys_factory=get_api_keys) -> FastAPI:
     settings = get_settings()
 
     mcp = None  # the MCP server, made below once `spend` exists
@@ -251,7 +259,19 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         return request.client.host if request.client else "unknown"
 
     def identify(request: Request) -> Visitor:
-        """Who is asking; raises when the bot check is on and the request has neither a session nor a sign-in."""
+        """Who is asking; raises when the bot check is on and the request has neither a session nor a sign-in, or
+        when it brings an API key that is unknown, revoked or not allowed from the request's origin."""
+        scheme, _, key = request.headers.get("authorization", "").partition(" ")
+        if settings.api_keys and scheme.lower() == "bearer" and key.strip():
+            try:
+                user = api_keys_factory().user_for(key.strip(), request.headers.get("origin"))
+            except KeyRefused as e:
+                if e.origin:
+                    raise Problem(403, "origin_not_allowed", "This key cannot be used from this site",
+                                  "Add the site's origin to the key, or use another key.") from e
+                raise Problem(401, "invalid_api_key", "The API key is not valid",
+                              "It may have been revoked. Make a new one on the web app.") from e
+            return Visitor(None, client_ip(request), user)
         sessions = sessions_factory()
         session = sessions.read(request.cookies.get(COOKIE))
         user = signed_in_user(sessions, request)
@@ -285,7 +305,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         analyst=analyst_factory, messages=messages_factory, llm=llm_factory, suggester=suggester_factory,
         transcriber=transcriber_factory, identify=identify, spend=spend, turnstile_site_key=turnstile_site_key,
         starters=starters, sign_in=lambda: github_factory() is not None, datasets=dataset_analysts_factory,
-        upload_max_mb=settings.upload_max_mb if settings.uploads else None, reports=settings.deep_analysis,
+        upload_max_mb=settings.upload_max_mb if settings.uploads else None, reports=settings.deep_analysis, api_keys=settings.api_keys,
     ))
     if settings.uploads:
         app.include_router(datasets_router(
@@ -299,6 +319,8 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
     app.include_router(reports_router(reports=reports_factory, analysis=deep_analysis_factory, counters=get_counters,
                                       identify=identify, per_day=settings.reports_per_day,
                                       enabled=settings.deep_analysis))
+
+    app.include_router(keys_router(keys=api_keys_factory, sessions=sessions_factory, enabled=settings.api_keys))
 
     @app.get("/v1/insights", tags=["v1"])
     def insights() -> InsightsV1:

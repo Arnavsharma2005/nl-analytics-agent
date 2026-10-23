@@ -42,5 +42,7 @@ export interface Problem {
 export type Insights = Schemas["InsightsV1"];
 export type Insight = Schemas["InsightV1"];
 export type ReportStatus = Schemas["ReportStatusV1"];
+export type ApiKey = Schemas["KeyV1"];
+export type NewApiKey = Schemas["NewKeyV1"];
 export type Report = Schemas["ReportV1"];
 export type ReportStep = Schemas["StepV1"];

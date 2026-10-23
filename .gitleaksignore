@@ -1,3 +1,4 @@
 # Known false positives (fingerprint = commit:file:rule:line). Add a line here only after checking it is not a credential.
 # A Groq model name next to a dummy key in a test; the test now uses a constant, so later commits do not match.
 fa0fc7dc338ab3875c525509e9676c2c61fcc55b:apps/api/tests/test_api_v1.py:generic-api-key:255
+cffc4b15ae59f60380119c87842f04c894ea9cfd:apps/web-next/e2e/keys.spec.ts:generic-api-key:19
