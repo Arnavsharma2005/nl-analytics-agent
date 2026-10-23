@@ -673,6 +673,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Schedules
+         * @description Your schedules, with when each runs next and how its last run went.
+         */
+        get: operations["list_schedules_v1_schedules_get"];
+        put?: never;
+        /**
+         * Create Schedule
+         * @description Ask a question daily or weekly and send the answer by email or Telegram; or, as an alert, send only when
+         *     its number crosses a threshold.
+         */
+        post: operations["create_schedule_v1_schedules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedules/{schedule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Schedule */
+        delete: operations["delete_schedule_v1_schedules__schedule_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/session": {
         parameters: {
             query?: never;
@@ -741,6 +783,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AlertV1 */
+        AlertV1: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: ">" | ">=" | "<" | "<=";
+            /**
+             * Value
+             * @description Send when the answer's number compared with this holds.
+             */
+            value: number;
+        };
         /**
          * Answer
          * @description Everything the analyst returns for one question. New fields are only ever added, each with a default.
@@ -1418,6 +1473,104 @@ export interface components {
              * @description Approve under this wording instead of the question as understood.
              */
             question?: string | null;
+        };
+        /** ScheduleRequestV1 */
+        ScheduleRequestV1: {
+            /** @description Required for an alert, absent for a report. */
+            alert?: components["schemas"]["AlertV1"] | null;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "email" | "telegram";
+            /**
+             * Every
+             * @default day
+             * @enum {string}
+             */
+            every: "day" | "week";
+            /**
+             * Hour Utc
+             * @description When to run, as an hour of the day in UTC.
+             * @default 3
+             */
+            hour_utc: number;
+            /**
+             * Kind
+             * @default report
+             * @enum {string}
+             */
+            kind: "report" | "alert";
+            /**
+             * Question
+             * @description For an alert, a question with one number as its answer, e.g. "Revenue yesterday".
+             */
+            question: string;
+            /**
+             * To
+             * @description An email address, or a Telegram chat id (the bot's /id command shows it).
+             */
+            to: string;
+            /**
+             * Weekday
+             * @description For weekly schedules: 0 is Monday.
+             * @default 0
+             */
+            weekday: number;
+        };
+        /** ScheduleV1 */
+        ScheduleV1: {
+            alert: components["schemas"]["AlertV1"] | null;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "email" | "telegram";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Every
+             * @enum {string}
+             */
+            every: "day" | "week";
+            /** Hour Utc */
+            hour_utc: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "report" | "alert";
+            /** Last Run At */
+            last_run_at: string | null;
+            /**
+             * Last Status
+             * @description "sent", "quiet" (an alert that did not fire) or what went wrong.
+             */
+            last_status: string | null;
+            /**
+             * Last Value
+             * @description An alert's number at its last run.
+             */
+            last_value: number | null;
+            /**
+             * Next Run At
+             * Format: date-time
+             */
+            next_run_at: string;
+            /** Question */
+            question: string;
+            /** To */
+            to: string;
+            /** Weekday */
+            weekday: number;
         };
         /** SectionV1 */
         SectionV1: {
@@ -2579,6 +2732,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReportStatusV1"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_schedules_v1_schedules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleV1"][];
+                };
+            };
+        };
+    };
+    create_schedule_v1_schedules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleRequestV1"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleV1"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_schedule_v1_schedules__schedule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

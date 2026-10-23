@@ -113,6 +113,12 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_webhook_secret: str | None = None
     telegram_charts: bool = True  # charts as QuickChart images; the figures go to quickchart.io in the URL
+    # Scheduled reports and alerts (app/schedules.py), run hourly by app/jobs/schedules.py. They are sent by the
+    # Telegram bot, or by email through Resend, only to the addresses or domains listed (JSON: ["me@x.com", "x.org"]).
+    schedules: bool = False
+    resend_api_key: str | None = None
+    email_from: str | None = None  # e.g. "Sales analyst <reports@yourdomain.com>", a sender Resend has verified
+    schedule_email_allowlist: list[str] = []
     # Embedding model for finding similar questions, on Cloudflare Workers AI (uses the CLOUDFLARE_* keys). Without
     # those keys, or with this empty, questions are compared by the words they share.
     embedding_model: str | None = "@cf/baai/bge-m3"

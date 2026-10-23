@@ -1,6 +1,31 @@
 {
   "components": {
     "schemas": {
+      "AlertV1": {
+        "properties": {
+          "op": {
+            "enum": [
+              ">",
+              ">=",
+              "<",
+              "<="
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "value": {
+            "description": "Send when the answer's number compared with this holds.",
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "op",
+          "value"
+        ],
+        "title": "AlertV1",
+        "type": "object"
+      },
       "Answer": {
         "description": "Everything the analyst returns for one question. New fields are only ever added, each with a default.",
         "properties": {
@@ -1542,6 +1567,207 @@
           "decision"
         ],
         "title": "ReviewV1",
+        "type": "object"
+      },
+      "ScheduleRequestV1": {
+        "properties": {
+          "alert": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertV1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for an alert, absent for a report."
+          },
+          "channel": {
+            "enum": [
+              "email",
+              "telegram"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "every": {
+            "default": "day",
+            "enum": [
+              "day",
+              "week"
+            ],
+            "title": "Every",
+            "type": "string"
+          },
+          "hour_utc": {
+            "default": 3,
+            "description": "When to run, as an hour of the day in UTC.",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Hour Utc",
+            "type": "integer"
+          },
+          "kind": {
+            "default": "report",
+            "enum": [
+              "report",
+              "alert"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "question": {
+            "description": "For an alert, a question with one number as its answer, e.g. \"Revenue yesterday\".",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Question",
+            "type": "string"
+          },
+          "to": {
+            "description": "An email address, or a Telegram chat id (the bot's /id command shows it).",
+            "maxLength": 254,
+            "minLength": 1,
+            "title": "To",
+            "type": "string"
+          },
+          "weekday": {
+            "default": 0,
+            "description": "For weekly schedules: 0 is Monday.",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Weekday",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "question",
+          "channel",
+          "to"
+        ],
+        "title": "ScheduleRequestV1",
+        "type": "object"
+      },
+      "ScheduleV1": {
+        "properties": {
+          "alert": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertV1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channel": {
+            "enum": [
+              "email",
+              "telegram"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "every": {
+            "enum": [
+              "day",
+              "week"
+            ],
+            "title": "Every",
+            "type": "string"
+          },
+          "hour_utc": {
+            "title": "Hour Utc",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "report",
+              "alert"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\"sent\", \"quiet\" (an alert that did not fire) or what went wrong.",
+            "title": "Last Status"
+          },
+          "last_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An alert's number at its last run.",
+            "title": "Last Value"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "title": "Next Run At",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          },
+          "weekday": {
+            "title": "Weekday",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "question",
+          "kind",
+          "every",
+          "hour_utc",
+          "weekday",
+          "channel",
+          "to",
+          "alert",
+          "next_run_at",
+          "last_run_at",
+          "last_status",
+          "last_value",
+          "created_at"
+        ],
+        "title": "ScheduleV1",
         "type": "object"
       },
       "SectionV1": {
@@ -3117,6 +3343,108 @@
           }
         },
         "summary": "Get Report",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/schedules": {
+      "get": {
+        "description": "Your schedules, with when each runs next and how its last run went.",
+        "operationId": "list_schedules_v1_schedules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleV1"
+                  },
+                  "title": "Response List Schedules V1 Schedules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Schedules",
+        "tags": [
+          "v1"
+        ]
+      },
+      "post": {
+        "description": "Ask a question daily or weekly and send the answer by email or Telegram; or, as an alert, send only when\nits number crosses a threshold.",
+        "operationId": "create_schedule_v1_schedules_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleRequestV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleV1"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Schedule",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/v1/schedules/{schedule_id}": {
+      "delete": {
+        "operationId": "delete_schedule_v1_schedules__schedule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Schedule",
         "tags": [
           "v1"
         ]
