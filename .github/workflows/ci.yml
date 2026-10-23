@@ -41,6 +41,8 @@ jobs:
         run: python -m pytest -q
       - name: The web app's copy of the OpenAPI spec is up to date
         run: python apps/api/scripts/export_openapi.py --check
+      - name: The Python SDK's models are generated from that spec
+        run: packages/sdk-py/generate.sh && git diff --exit-code packages/sdk-py
       - name: Every gold query in the eval set runs
         run: |
           python eval/run_eval.py --gold-only
@@ -108,3 +110,21 @@ jobs:
       - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sdk-ts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sdk-ts
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/sdk-ts/package-lock.json
+      - run: npm ci
+      - name: Types generated from the OpenAPI spec are up to date
+        run: npm run gen && git diff --exit-code src/schema.d.ts
+      - run: npm run typecheck
+      - run: npm test
