@@ -208,7 +208,7 @@ Changing a rule changes the SQL agent's prompt, so record the eval cassette agai
 
 ### Context and checks
 
-Five switches, each off by default. Each is turned on only when the held-out eval score holds up with it
+Six switches, each off by default. Each is turned on only when the held-out eval score holds up with it
 (`CONTEXT_RETRIEVAL=true python eval/run_eval.py --split test`, compared with a run without it).
 
 | Setting | What it does |
@@ -218,6 +218,7 @@ Five switches, each off by default. Each is turned on only when the held-out eva
 | `CHECK_RESULTS` | Sends a query that finds nothing back to the SQL agent once. If it still finds nothing, that is the answer. |
 | `CHECK_SUMMARIES` | Checks every figure in the summary against the result, allowing for rounding, ₹ L/Cr units, and simple sums, differences, ratios and shares. A summary that fails is rewritten once, and `summary_verified` says whether the final one passed. |
 | `DRIVER_ANALYSIS` | Answers "why did it change?" questions ("why did revenue grow in Q3 2025?") by splitting the change in code instead of writing SQL. The model only picks the metric and the two periods; one query returns the metric for both periods by every region, category, channel and segment, and each group's change and share of the total change are computed exactly. For an average such as order value, each group's contribution splits into a mix effect (its share of orders moved) and a rate effect (its own average moved). A dimension whose groups overlap for that metric is left out. The metrics and dimensions are in `apps/api/semantic/drivers.yml`, and the answer is marked `analysis: "drivers"`. |
+| `FORECASTING` | Answers questions about the future ("what will revenue be next quarter?"). The model reads the question as the history to query ("monthly revenue") and how many periods ahead; the SQL agent writes the history query as usual; then code forecasts it with exponential smoothing (a level, a damped trend, or a trend and a season given two years of history), chosen by how well each would have forecast the series' own last few periods. The answer has the history, the forecast and its 80% range (`analysis: "forecast"`), drawn with the range shaded, and says how far off the backtest was. Fewer than 12 periods of history is not forecast. |
 
 Similar questions are found with the `bge-m3` embedding model on Cloudflare Workers AI when the `CLOUDFLARE_*`
 keys are set, and by shared words otherwise or when Cloudflare can't be reached. CI checks that the fast path

@@ -21,7 +21,9 @@ SYSTEM = """You choose the best visualization for a query result. Rules of thumb
 x, y and series must be column names from the result. y lists the numeric measure column(s)."""
 
 
-class ChartSpec(BaseModel):
+class ChartChoice(BaseModel):
+    """The chart agent's choice."""
+
     # Responses always carry every field, so the OpenAPI schema marks them required for generated clients.
     model_config = ConfigDict(json_schema_serialization_defaults_required=True)
 
@@ -30,6 +32,14 @@ class ChartSpec(BaseModel):
     y: list[str] = Field(default_factory=list, description="Numeric measure column(s).")
     series: str | None = Field(default=None, description="Optional categorical column that splits lines/bars.")
     title: str = Field(description="Short chart title in plain English.")
+
+
+class ChartSpec(ChartChoice):
+    """A chart as answers carry it: the agent's choice, or one drawn up in code, which may add a band."""
+
+    band: list[str] | None = Field(
+        default=None, description="Two columns, lower and upper, shaded as a range on a line chart (a forecast's "
+                                  "interval). With a band, y columns after the first are drawn dashed as projections.")
 
 
 MAX_SERIES = 8
@@ -139,7 +149,7 @@ def choose_chart(llm: LLM, question: str, columns: list[str], rows: list[list], 
         f"First rows: {json.dumps(rows[:sample], default=str)}"
     )
     try:
-        spec = llm.structured(ChartSpec, SYSTEM, user, tier="fast")
+        spec = ChartSpec(**llm.structured(ChartChoice, SYSTEM, user, tier="fast").model_dump())
     except Exception:  # noqa: BLE001 - a chart is never worth failing the answer for
         return heuristic_chart(question, columns, rows), "fallback"
     if validate_chart(spec, columns, rows) is None:

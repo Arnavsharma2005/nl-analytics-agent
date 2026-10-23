@@ -107,6 +107,9 @@ export function chartOption(spec: ChartSpec, columns: string[], rows: Cell[][], 
   }
 
   const bar = spec.type === "bar";
+  const band = !bar && !spec.series && spec.band?.length === 2 && spec.band.every((c) => columns.includes(c)) ? spec.band : null;
+  if (band) return bandOption(spec, columns, rows, p, { base, tooltip, axis, categories, yFormat });
+
   // Many long category names read better down the side than squeezed along the bottom.
   const horizontal = bar && series.length === 1 && categories.length > 6 && categories.some((c) => c.length > 10);
   const categoryAxis = { ...axis, type: "category", data: categories, splitLine: { show: false },
@@ -124,5 +127,52 @@ export function chartOption(spec: ChartSpec, columns: string[], rows: Cell[][], 
     series: series.map((s) => bar
       ? { ...s, type: "bar", barMaxWidth: 36, itemStyle: { borderRadius: horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0] } }
       : { ...s, type: "line", smooth: false, showSymbol: categories.length <= 24, symbolSize: 6, lineStyle: { width: 2 } }),
+  };
+}
+
+const DASHED = "path://M0,4H6V6H0Z M9,4H15V6H9Z M18,4H24V6H18Z";
+
+/** A line chart with a shaded range (a forecast and its interval): the first y column solid, the rest dashed, and
+ * the band drawn as a stacked area between its lower and upper columns. */
+function bandOption(spec: ChartSpec, columns: string[], rows: Cell[][], p: Palette,
+  parts: { base: object; tooltip: object; axis: Record<string, object>; categories: string[]; yFormat: (v: unknown) => string }) {
+  const { base, tooltip, axis, categories, yFormat } = parts;
+  const col = (c: string) => rows.map((r) => r[columns.indexOf(c)]);
+  const [lowerCol, upperCol] = spec.band!;
+  const lower = col(lowerCol);
+  const upper = col(upperCol);
+  const y = spec.y.filter((c) => columns.includes(c));
+  // The projection keeps the actual line's colour, dashed, with the range in a pale wash of it.
+  const ink = p.series[0];
+  const lines = y.map((c, i) => ({
+    name: humanize(c), type: "line", data: col(c), showSymbol: false, smooth: false, connectNulls: false,
+    itemStyle: { color: ink }, lineStyle: { width: 2, color: ink, ...(i > 0 ? { type: "dashed" } : {}) }, z: 3,
+  }));
+  const shaded = [
+    { name: "range-base", type: "line", data: lower, stack: "band", symbol: "none", lineStyle: { opacity: 0 }, silent: true },
+    { name: "range", type: "line", stack: "band", symbol: "none", lineStyle: { opacity: 0 }, silent: true,
+      areaStyle: { color: ink, opacity: 0.14 },
+      data: upper.map((u, i) => (u === null || lower[i] === null ? null : Number(u) - Number(lower[i]))) },
+  ];
+  return {
+    ...base,
+    grid: { left: 8, right: 16, top: 40, bottom: 8, containLabel: true },
+    legend: { top: 0, left: 0, textStyle: { color: p.muted }, itemWidth: 24, itemHeight: 10,
+      data: lines.map((l, i) => ({ name: l.name, icon: i ? DASHED : "path://M0,4H24V6H0Z" })) },
+    tooltip: {
+      ...tooltip, trigger: "axis", axisPointer: { type: "line" },
+      formatter: (items: { dataIndex: number; seriesName: string; marker: string; value: unknown }[]) => {
+        const i = items[0]?.dataIndex ?? 0;
+        const shown = items.filter((it) => !it.seriesName.startsWith("range") && it.value !== null && it.value !== undefined);
+        const lines = shown.map((it) => `${it.marker}${it.seriesName}: ${formatValue(it.value, y[0])}`);
+        if (lower[i] !== null && upper[i] !== null && !shown.some((it) => it.seriesName === humanize(y[0]))) {
+          lines.push(`Range: ${formatValue(lower[i], y[0])} to ${formatValue(upper[i], y[0])}`);
+        }
+        return [categories[i], ...lines].join("<br/>");
+      },
+    },
+    xAxis: { ...axis, type: "category", data: categories, splitLine: { show: false }, axisLabel: { ...(axis.axisLabel as object), hideOverlap: true } },
+    yAxis: { ...axis, type: "value", axisLabel: { ...(axis.axisLabel as object), formatter: yFormat } },
+    series: [...shaded, ...lines],
   };
 }

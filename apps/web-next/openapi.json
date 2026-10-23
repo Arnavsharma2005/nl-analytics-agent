@@ -7,14 +7,17 @@
           "analysis": {
             "anyOf": [
               {
-                "const": "drivers",
+                "enum": [
+                  "drivers",
+                  "forecast"
+                ],
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "drivers: a question about why a metric changed, answered by splitting the change by each dimension in code (the rows are the drivers, biggest first).",
+            "description": "drivers: a question about why a metric changed, answered by splitting the change by each dimension in code (the rows are the drivers, biggest first). forecast: the history the SQL returned and, after it, the periods forecast in code with their 80% range (lower, upper).",
             "title": "Analysis"
           },
           "answer": {
@@ -403,7 +406,23 @@
         "type": "object"
       },
       "ChartSpec": {
+        "description": "A chart as answers carry it: the agent's choice, or one drawn up in code, which may add a band.",
         "properties": {
+          "band": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Two columns, lower and upper, shaded as a range on a line chart (a forecast's interval). With a band, y columns after the first are drawn dashed as projections.",
+            "title": "Band"
+          },
           "series": {
             "anyOf": [
               {
@@ -459,7 +478,8 @@
           "x",
           "y",
           "series",
-          "title"
+          "title",
+          "band"
         ],
         "title": "ChartSpec",
         "type": "object"

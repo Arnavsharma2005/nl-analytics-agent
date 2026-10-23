@@ -88,7 +88,7 @@ def test_summary_failure_still_returns_the_chart(db):
 def test_light_steps_use_the_fast_tier(db):
     llm = FakeLLM(sql=[REVENUE_BY_REGION], chart=ChartSpec(type="bar", x="region", y=["revenue"], title="Revenue"))
     run(llm, db)
-    assert llm.tiers == [("RouteDecision", "fast"), ("SQLDraft", "strong"), ("ChartSpec", "fast"), ("text", "strong")]
+    assert llm.tiers == [("RouteDecision", "fast"), ("SQLDraft", "strong"), ("ChartChoice", "fast"), ("text", "strong")]
 
 
 def collect(analyst, question="Revenue by region"):
