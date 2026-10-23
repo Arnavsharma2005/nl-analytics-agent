@@ -129,7 +129,7 @@ def test_turnstile_gates_sessions():
 
 def make_client(db, sessions, quota=None, analyst=None):
     analyst = analyst or Analyst(FakeLLM(sql=[REVENUE_BY_REGION]), db)
-    return TestClient(create_app(analyst_factory=lambda: analyst, db_factory=lambda: db,
+    return TestClient(create_app(analyst_factory=lambda *_: analyst, db_factory=lambda: db,
                                  sessions_factory=lambda: sessions, quota_factory=lambda: quota))
 
 

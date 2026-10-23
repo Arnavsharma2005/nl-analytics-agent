@@ -29,7 +29,7 @@ def make(db, app_tables, monkeypatch):
     clients = []
 
     def build(quota=None, analyst=None, source=None):
-        app = create_app(analyst_factory=lambda: analyst or Analyst(llm, db), db_factory=lambda: source or db,
+        app = create_app(analyst_factory=lambda *_: analyst or Analyst(llm, db), db_factory=lambda: source or db,
                          llm_factory=lambda: llm, sessions_factory=lambda: Sessions("secret", 3600),
                          quota_factory=lambda: quota, github_factory=lambda: None, transcriber_factory=lambda: None)
         client = TestClient(app).__enter__()  # runs the lifespan, which starts the MCP session manager

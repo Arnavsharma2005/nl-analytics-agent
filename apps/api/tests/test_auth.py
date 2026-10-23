@@ -60,7 +60,7 @@ def make(db, app_tables, github, monkeypatch):
 
     def build(sessions=None, quota=None, sign_in=True):
         sessions = sessions or Sessions("secret", 3600)
-        app = create_app(analyst_factory=lambda: analyst, db_factory=lambda: db, llm_factory=lambda: llm,
+        app = create_app(analyst_factory=lambda *_: analyst, db_factory=lambda: db, llm_factory=lambda: llm,
                          sessions_factory=lambda: sessions, quota_factory=lambda: quota,
                          messages_factory=lambda: store, users_factory=lambda: users,
                          github_factory=lambda: oauth if sign_in else None, transcriber_factory=lambda: None)

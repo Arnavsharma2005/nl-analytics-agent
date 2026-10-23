@@ -42,6 +42,7 @@ from app.datasets.sheets import SheetsClient
 from app.datasets.store import Datasets
 from app.db import Database
 from app.deep_analysis import Capabilities, DeepAnalysis
+from app.flags import FLAGS, Flags
 from app.insights_feed import InsightsFeed, InsightsV1
 from app.key_cors import KeyCORS
 from app.keys import ApiKeys, KeyRefused
@@ -96,25 +97,58 @@ def get_llm() -> FallbackLLM:
 
 
 @lru_cache
-def get_analyst() -> Analyst:
+def get_flags() -> Flags:
     s = get_settings()
-    db = get_db()
-    context = (Context(semantic.load(), db.schema(), build_embedder(s), fast_path=s.verified_fast_path)
-               if s.context_retrieval else None)
-    drivers = driver_analysis.load() if s.driver_analysis else None
-    router = LearnedRouter.load((s.semantic_dir or semantic.SEMANTIC_DIR) / "router.json") if s.learned_router else None
-    switches = {"context": bool(context), "fast_path": bool(context) and s.verified_fast_path,
-                "check_results": s.check_results, "check_summaries": s.check_summaries, "drivers": bool(drivers),
-                "forecasting": s.forecasting, "learned_router": bool(router), f"prompt_{s.sql_prompt}": s.sql_prompt != "v1"}
+    curators = {login.lower() for login in s.curators}
+
+    def is_curator(user: int) -> bool:
+        found = get_users().get(user)
+        return bool(found and found.login.lower() in curators)
+
+    return Flags(get_app_engine(), {name: bool(getattr(s, name)) for name in FLAGS}, is_curator)
+
+
+@lru_cache
+def _context(fast_path: bool) -> Context:
+    s = get_settings()
+    return Context(semantic.load(), get_db().schema(), build_embedder(s), fast_path=fast_path)
+
+
+@lru_cache
+def _drivers():
+    return driver_analysis.load()
+
+
+@lru_cache
+def _router() -> LearnedRouter:
+    return LearnedRouter.load((get_settings().semantic_dir or semantic.SEMANTIC_DIR) / "router.json")
+
+
+def get_analyst(on: frozenset[str] | None = None) -> Analyst:
+    """The analyst with the flags in `on` (app/flags.py); by default, the ones on for everyone."""
+    return _analyst(get_flags().switches(None) if on is None else on)
+
+
+@lru_cache(maxsize=16)
+def _analyst(on: frozenset[str]) -> Analyst:
+    s = get_settings()
+    context = _context("verified_fast_path" in on) if "context_retrieval" in on else None
+    drivers = _drivers() if "driver_analysis" in on else None
+    router = _router() if "learned_router" in on else None
+    switches = {"context": bool(context), "fast_path": bool(context) and "verified_fast_path" in on,
+                "check_results": "check_results" in on, "check_summaries": "check_summaries" in on,
+                "drivers": bool(drivers), "forecasting": "forecasting" in on, "learned_router": bool(router),
+                f"prompt_{s.sql_prompt}": s.sql_prompt != "v1"}
     cache = None
     if s.answer_cache_ttl_s:
         # Answers depend on the build and on which features are on, so either changing starts a fresh cache.
         version = (s.git_commit or "dev") + "".join(f":{k}" for k, on in switches.items() if on)
         cache = AnswerCache(get_app_engine(), version, s.answer_cache_ttl_s)
-    return Analyst(get_llm(), db, max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm, cache=cache,
-                   context=context, check_results=s.check_results, check_summaries=s.check_summaries,
-                   drivers=drivers, forecasting=s.forecasting, confidence=load_model(),
-                   learned_router=router, sql_prompt=SQLPrompt.load(s.sql_prompt))
+    return Analyst(get_llm(), get_db(), max_attempts=s.max_sql_attempts, rows_for_llm=s.rows_for_llm, cache=cache,
+                   context=context, check_results=switches["check_results"],
+                   check_summaries=switches["check_summaries"], drivers=drivers,
+                   forecasting=switches["forecasting"], confidence=load_model(), learned_router=router,
+                   sql_prompt=SQLPrompt.load(s.sql_prompt))
 
 
 @lru_cache
@@ -177,11 +211,14 @@ def get_reports() -> Reports:
     return Reports(get_app_engine())
 
 
-@lru_cache
 def get_deep_analysis() -> DeepAnalysis:
-    s = get_settings()
-    can = Capabilities(why=s.driver_analysis and driver_analysis.load() is not None, forecast=s.forecasting)
-    return DeepAnalysis(get_llm(), get_analyst(), database(), sorted(get_db().schema().tables), can)
+    return _deep_analysis(get_flags().switches(None))
+
+
+@lru_cache(maxsize=4)
+def _deep_analysis(on: frozenset[str]) -> DeepAnalysis:
+    can = Capabilities(why="driver_analysis" in on and _drivers() is not None, forecast="forecasting" in on)
+    return DeepAnalysis(get_llm(), get_analyst(on), database(), sorted(get_db().schema().tables), can)
 
 
 @lru_cache
@@ -247,7 +284,8 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                library_pr_factory=get_library_pr, insights_factory=get_insights,
                reports_factory=get_reports, deep_analysis_factory=get_deep_analysis,
                api_keys_factory=get_api_keys, telegram_factory=None,
-               schedules_factory=get_schedules, notifier_factory=get_notifier) -> FastAPI:
+               schedules_factory=get_schedules, notifier_factory=get_notifier, flags_factory=get_flags) -> FastAPI:
+    """`analyst_factory` takes the flags on for a visitor (app/flags.py), or none for the ones on for everyone."""
     settings = get_settings()
 
     mcp = None  # the MCP server, made below once `spend` exists
@@ -316,6 +354,9 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         spend(who)
         return who
 
+    def flag(name: str, user: int | None) -> bool:
+        return flags_factory().on(name, user)
+
     def turnstile_site_key() -> str | None:
         return settings.turnstile_site_key if sessions_factory().required else None
 
@@ -323,10 +364,12 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         return [q.question for q in semantic.load().queries if q.starter]
 
     app.include_router(v1_router(
-        analyst=analyst_factory, messages=messages_factory, llm=llm_factory, suggester=suggester_factory,
+        analyst=lambda who: analyst_factory(flags_factory().switches(who.user)), messages=messages_factory, llm=llm_factory, suggester=suggester_factory,
         transcriber=transcriber_factory, identify=identify, spend=spend, turnstile_site_key=turnstile_site_key,
         starters=starters, sign_in=lambda: github_factory() is not None, datasets=dataset_analysts_factory,
-        upload_max_mb=settings.upload_max_mb if settings.uploads else None, reports=settings.deep_analysis, api_keys=settings.api_keys,
+        upload_max_mb=settings.upload_max_mb if settings.uploads else None,
+        reports=lambda user: flag("deep_analysis", user), api_keys=settings.api_keys,
+        user_of=lambda request: signed_in_user(sessions_factory(), request),
     ))
     if settings.uploads:
         app.include_router(datasets_router(
@@ -339,7 +382,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
 
     app.include_router(reports_router(reports=reports_factory, analysis=deep_analysis_factory, counters=get_counters,
                                       identify=identify, per_day=settings.reports_per_day,
-                                      enabled=settings.deep_analysis))
+                                      enabled=lambda user: flag("deep_analysis", user)))
 
     if settings.telegram_bot_token and settings.telegram_webhook_secret:
         def make_bot() -> TelegramBot:
@@ -351,7 +394,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
 
     app.include_router(schedules_router(schedules=schedules_factory, notifier=notifier_factory, identify=identify,
                                         email_allowlist=settings.schedule_email_allowlist,
-                                        enabled=settings.schedules))
+                                        enabled=lambda user: flag("schedules", user)))
 
     app.include_router(keys_router(keys=api_keys_factory, sessions=sessions_factory, enabled=settings.api_keys))
 

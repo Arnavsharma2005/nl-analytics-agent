@@ -6,6 +6,7 @@ name: Schedules
 #   GROQ_API_KEY / GEMINI_API_KEY                        a model to answer with
 #   RESEND_API_KEY, EMAIL_FROM                           to send email (optional)
 #   TELEGRAM_BOT_TOKEN                                   to send to Telegram (optional)
+# and the repository variable CURATORS (a JSON list of GitHub logins) when the schedules flag is set to "curators".
 # Without the database secrets the job says so and stops.
 
 on:
@@ -34,6 +35,7 @@ jobs:
       EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       PUBLIC_URL: https://nl-analytics-agent.onrender.com
+      CURATORS: ${{ vars.CURATORS || '[]' }}
     steps:
       - name: Check the database secrets are set
         id: ready

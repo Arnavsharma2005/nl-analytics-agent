@@ -115,13 +115,23 @@ def app_engine(db):
     return create_engine(TEST_DB)
 
 
+@pytest.fixture(autouse=True)
+def fresh_flags():
+    """Feature flags read their defaults from the settings, which tests change, so each test starts afresh."""
+    from app.main import get_flags
+
+    get_flags.cache_clear()
+    yield
+    get_flags.cache_clear()
+
+
 @pytest.fixture
 def app_tables(app_engine):
     """Empty app tables for one test."""
     from sqlalchemy import text
 
     with app_engine.begin() as conn:
-        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback, app.users, app.datasets, app.shares, app.curation, app.insights, app.reports, app.api_keys, app.schedules"))
+        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback, app.users, app.datasets, app.shares, app.curation, app.insights, app.reports, app.api_keys, app.schedules, app.flags"))
     return app_engine
 
 

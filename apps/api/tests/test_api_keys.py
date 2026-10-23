@@ -78,7 +78,7 @@ def make(db, app_tables, monkeypatch):
 
     def build(llm=None):
         llm = llm or FakeLLM(sql=[SQL])
-        app = create_app(analyst_factory=lambda: Analyst(llm, db), db_factory=lambda: db, llm_factory=lambda: llm,
+        app = create_app(analyst_factory=lambda *_: Analyst(llm, db), db_factory=lambda: db, llm_factory=lambda: llm,
                          sessions_factory=lambda: sessions, quota_factory=lambda: None, users_factory=lambda: users,
                          github_factory=lambda: object(), transcriber_factory=lambda: None,
                          api_keys_factory=lambda: ApiKeys(app_tables))

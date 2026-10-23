@@ -28,14 +28,15 @@ class ReportRequestV1(BaseModel):
 
 def reports_router(*, reports: Callable[[], Reports], analysis: Callable[[], DeepAnalysis],
                    counters: Callable[[], Counters], identify: Callable[[Request], Visitor], per_day: int,
-                   enabled: bool = True) -> APIRouter:
+                   enabled: Callable[[int | None], bool] = lambda _: True) -> APIRouter:
+    """`enabled` says whether Deep Analysis is on for a user (app/flags.py)."""
     router = APIRouter(prefix="/v1", tags=["v1"])
 
     def owner_of(request: Request) -> str:
-        if not enabled:
-            raise Problem(404, "reports_off", "Deep Analysis is not turned on here",
-                          "Set DEEP_ANALYSIS=true on the server to offer reports.")
         who = identify(request)
+        if not enabled(who.user):
+            raise Problem(404, "reports_off", "Deep Analysis is not turned on here",
+                          "Set DEEP_ANALYSIS=true on the server, or switch its flag on, to offer reports.")
         if not who.user:
             raise Problem(401, "sign_in_required", "Sign in to use Deep Analysis",
                           "Reports run many queries, so they are for signed-in users.")

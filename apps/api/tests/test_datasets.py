@@ -297,7 +297,7 @@ def make(db, app_tables):
     sheets = SheetsClient(transport=httpx.MockTransport(google.handle))
 
     def build(session=True):
-        app = create_app(analyst_factory=lambda: Analyst(llm, db), db_factory=lambda: db, llm_factory=lambda: llm,
+        app = create_app(analyst_factory=lambda *_: Analyst(llm, db), db_factory=lambda: db, llm_factory=lambda: llm,
                          sessions_factory=lambda: Sessions("secret", 3600), quota_factory=lambda: None,
                          messages_factory=lambda: messages, datasets_factory=lambda: store,
                          dataset_analysts_factory=lambda: analysts, github_factory=lambda: None,

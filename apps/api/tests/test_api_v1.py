@@ -54,7 +54,7 @@ def make(db, app_tables, llm, suggester):
     def build(quota=None, transcriber=None, messages=None, analyst_llm=None):
         analyst = Analyst(analyst_llm or llm, db)
         store = messages or Messages(app_tables)
-        app = create_app(analyst_factory=lambda: analyst, db_factory=lambda: db, llm_factory=lambda: llm,
+        app = create_app(analyst_factory=lambda *_: analyst, db_factory=lambda: db, llm_factory=lambda: llm,
                          sessions_factory=lambda: Sessions("secret", 3600), quota_factory=lambda: quota,
                          messages_factory=lambda: store, suggester_factory=lambda: suggester,
                          transcriber_factory=lambda: transcriber)
