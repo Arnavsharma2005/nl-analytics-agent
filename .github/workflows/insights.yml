@@ -1,0 +1,56 @@
+name: Insights
+
+# Nightly: find the latest complete week's notable moves and store them for the app's insights feed
+# (app/jobs/insights.py). The web app only reads the result. Needs these repository secrets:
+#   INSIGHTS_DATABASE_URL      the data, as a read-only role (the same as the app's DATABASE_URL)
+#   INSIGHTS_APP_DATABASE_URL  the app's own tables, where the feed is written
+#   GROQ_API_KEY / GEMINI_API_KEY (optional)  headlines written by a model; plain sentences without
+# Without the database secrets the job says so and stops, so forks and new clones don't fail every night.
+
+on:
+  schedule:
+    - cron: "30 1 * * *"  # 07:00 IST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: insights
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.INSIGHTS_DATABASE_URL }}
+      APP_DATABASE_URL: ${{ secrets.INSIGHTS_APP_DATABASE_URL }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Check the database secrets are set
+        id: ready
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$APP_DATABASE_URL" ]; then
+            echo "::notice::Set INSIGHTS_DATABASE_URL and INSIGHTS_APP_DATABASE_URL to refresh the insights feed."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.ready.outputs.go == 'true'
+      - uses: actions/setup-python@v6
+        if: steps.ready.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - if: steps.ready.outputs.go == 'true'
+        run: pip install -r apps/api/requirements.txt
+      - name: Refresh the feed
+        if: steps.ready.outputs.go == 'true'
+        working-directory: apps/api
+        run: |
+          alembic upgrade head
+          python -m app.jobs.insights

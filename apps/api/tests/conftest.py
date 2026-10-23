@@ -15,7 +15,7 @@ class FakeLLM:
     `sql` is a list of queries returned on successive SQL-agent calls (the last one repeats)."""
 
     def __init__(self, intent="data_query", sql=("SELECT 1 AS n",), chart=None, summary="Summary.", schema_answer="We have sales data.",
-                 assumptions=(), standalone=None, why=None, projection=None):
+                 assumptions=(), standalone=None, why=None, projection=None, headlines=None):
         self.intent = intent
         self.sql = list(sql)
         self.chart = chart
@@ -25,6 +25,7 @@ class FakeLLM:
         self.standalone = standalone  # the rewritten follow-up; None returns the latest message unchanged
         self.why = why  # the WhyReading for a "why did it change?" question
         self.projection = projection  # the ProjectionReading for a forecasting question
+        self.headlines = headlines  # the insights feed's headlines; an exception instance is raised instead
         self.systems: list[tuple[str, str]] = []
         self.calls: list[tuple[str, str]] = []
         self.tiers: list[tuple[str, str]] = []
@@ -35,6 +36,10 @@ class FakeLLM:
         self.systems.append((output.__name__, system))
         if output.__name__.startswith("RouteDecision"):
             return output(intent=self.intent, reason="test")
+        if output.__name__ == "Headlines":
+            if isinstance(self.headlines, Exception):
+                raise self.headlines
+            return output(headlines=self.headlines or [])
         if output.__name__ == "ProjectionReading":
             if self.projection is None:
                 raise AssertionError("no ProjectionReading scripted")
@@ -116,7 +121,7 @@ def app_tables(app_engine):
     from sqlalchemy import text
 
     with app_engine.begin() as conn:
-        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback, app.users, app.datasets, app.shares, app.curation"))
+        conn.execute(text("TRUNCATE app.usage_counters, app.answer_cache, app.messages, app.feedback, app.users, app.datasets, app.shares, app.curation, app.insights"))
     return app_engine
 
 

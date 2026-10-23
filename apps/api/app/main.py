@@ -34,6 +34,7 @@ from app.datasets.registry import DatasetAnalysts
 from app.datasets.sheets import SheetsClient
 from app.datasets.store import Datasets
 from app.db import Database
+from app.insights_feed import InsightsFeed, InsightsV1
 from app.llm import FallbackLLM
 from app.messages import Messages
 from app.problems import Problem, from_exception, install
@@ -139,6 +140,11 @@ def get_shares() -> Shares:
 
 
 @lru_cache
+def get_insights() -> InsightsFeed:
+    return InsightsFeed(get_app_engine())
+
+
+@lru_cache
 def get_users() -> Users:
     return Users(get_app_engine())
 
@@ -193,7 +199,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github,
                datasets_factory=get_datasets, dataset_analysts_factory=get_dataset_analysts,
                shares_factory=get_shares, sheets_factory=SheetsClient, curation_factory=get_curation,
-               library_pr_factory=get_library_pr) -> FastAPI:
+               library_pr_factory=get_library_pr, insights_factory=get_insights) -> FastAPI:
     settings = get_settings()
 
     mcp = None  # the MCP server, made below once `spend` exists
@@ -268,6 +274,12 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         ))
     app.include_router(shares_router(shares=shares_factory, messages=messages_factory, datasets=datasets_factory,
                                      identify=identify))
+
+    @app.get("/v1/insights", tags=["v1"])
+    def insights() -> InsightsV1:
+        """The latest complete week's most notable moves in the data, found nightly (app/jobs/insights.py), each
+        with its figures, the query behind them and a question to look into it. Empty before the first run."""
+        return insights_factory().latest()
 
     def adopt(session: str, owner: str) -> None:
         for kept in (messages_factory(), datasets_factory(), shares_factory()):
