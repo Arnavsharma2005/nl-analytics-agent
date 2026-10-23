@@ -184,7 +184,7 @@ export async function mockApi(page: Page, overrides: Partial<Api> = {}): Promise
     await json(route, { status: "ok" }).catch(() => {});
   });
   await page.route("**/v1/config", (route) =>
-    json(route, { turnstile_site_key: null, starters: STARTERS, features: { voice: false, explain: true, feedback: true, sign_in: true, uploads: true }, upload_max_mb: 5 }));
+    json(route, { turnstile_site_key: null, starters: STARTERS, features: { voice: false, explain: true, feedback: true, sign_in: true, uploads: true, reports: true }, upload_max_mb: 5 }));
   await page.route("**/v1/insights", (route) => json(route, api.insights));
   await page.route("**/v1/me", (route) => json(route, { user: api.user }));
   await page.route("**/v1/auth/logout", (route) => {

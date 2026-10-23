@@ -24,9 +24,11 @@ from app.api_auth import auth_router, is_https, signed_in_user
 from app.api_curator import curator_router
 from app.api_datasets import datasets_router
 from app.api_mcp import mcp_route, mcp_server
+from app.api_reports import reports_router
 from app.api_shares import shares_router
 from app.api_v1 import v1_router
 from app.auth import GitHub, Users
+from app.brief import database
 from app.confidence import load_model
 from app.config import get_settings
 from app.context import Context
@@ -36,11 +38,13 @@ from app.datasets.registry import DatasetAnalysts
 from app.datasets.sheets import SheetsClient
 from app.datasets.store import Datasets
 from app.db import Database
+from app.deep_analysis import Capabilities, DeepAnalysis
 from app.insights_feed import InsightsFeed, InsightsV1
 from app.llm import FallbackLLM
 from app.messages import Messages
 from app.problems import Problem, from_exception, install
 from app.providers import build_embedder, build_llm
+from app.reports import Reports
 from app.sessions import COOKIE, Sessions, Turnstile
 from app.shares import Shares
 from app.transcribe import Transcriber
@@ -160,6 +164,18 @@ def get_github() -> GitHub | None:
 
 
 @lru_cache
+def get_reports() -> Reports:
+    return Reports(get_app_engine())
+
+
+@lru_cache
+def get_deep_analysis() -> DeepAnalysis:
+    s = get_settings()
+    can = Capabilities(why=s.driver_analysis and driver_analysis.load() is not None, forecast=s.forecasting)
+    return DeepAnalysis(get_llm(), get_analyst(), database(), sorted(get_db().schema().tables), can)
+
+
+@lru_cache
 def get_curation() -> Curation:
     return Curation(get_app_engine(), semantic.load())
 
@@ -203,7 +219,8 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                transcriber_factory=get_transcriber, users_factory=get_users, github_factory=get_github,
                datasets_factory=get_datasets, dataset_analysts_factory=get_dataset_analysts,
                shares_factory=get_shares, sheets_factory=SheetsClient, curation_factory=get_curation,
-               library_pr_factory=get_library_pr, insights_factory=get_insights) -> FastAPI:
+               library_pr_factory=get_library_pr, insights_factory=get_insights,
+               reports_factory=get_reports, deep_analysis_factory=get_deep_analysis) -> FastAPI:
     settings = get_settings()
 
     mcp = None  # the MCP server, made below once `spend` exists
@@ -268,7 +285,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         analyst=analyst_factory, messages=messages_factory, llm=llm_factory, suggester=suggester_factory,
         transcriber=transcriber_factory, identify=identify, spend=spend, turnstile_site_key=turnstile_site_key,
         starters=starters, sign_in=lambda: github_factory() is not None, datasets=dataset_analysts_factory,
-        upload_max_mb=settings.upload_max_mb if settings.uploads else None,
+        upload_max_mb=settings.upload_max_mb if settings.uploads else None, reports=settings.deep_analysis,
     ))
     if settings.uploads:
         app.include_router(datasets_router(
@@ -278,6 +295,10 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
         ))
     app.include_router(shares_router(shares=shares_factory, messages=messages_factory, datasets=datasets_factory,
                                      identify=identify))
+
+    app.include_router(reports_router(reports=reports_factory, analysis=deep_analysis_factory, counters=get_counters,
+                                      identify=identify, per_day=settings.reports_per_day,
+                                      enabled=settings.deep_analysis))
 
     @app.get("/v1/insights", tags=["v1"])
     def insights() -> InsightsV1:

@@ -81,7 +81,8 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
               suggester: Callable[[], Context], transcriber: Callable[[], Transcriber | None],
               identify: Callable[[Request], Visitor], spend: Callable[[Visitor], None],
               turnstile_site_key: Callable[[], str | None], starters: Callable[[], list[str]],
-              sign_in: Callable[[], bool], datasets: Callable[[], DatasetAnalysts], upload_max_mb: int | None) -> APIRouter:
+              sign_in: Callable[[], bool], datasets: Callable[[], DatasetAnalysts], upload_max_mb: int | None,
+              reports: bool = False) -> APIRouter:
     """`identify` names the visitor (raising if the bot check is missing); `spend` counts one question against
     their quota (raising when it is used up)."""
     router = APIRouter(prefix="/v1", tags=["v1"])
@@ -107,7 +108,8 @@ def v1_router(*, analyst: Callable[[], Analyst], messages: Callable[[], Messages
         """What the web app needs at start-up."""
         return ConfigV1(turnstile_site_key=turnstile_site_key(), starters=starters(),
                         features={"voice": transcriber() is not None, "explain": True, "feedback": True,
-                                  "sign_in": sign_in(), "uploads": upload_max_mb is not None},
+                                  "sign_in": sign_in(), "uploads": upload_max_mb is not None,
+                                  "reports": reports and sign_in()},
                         upload_max_mb=upload_max_mb)
 
     @router.post("/conversations/{conversation_id}/messages", response_model=MessageV1,
