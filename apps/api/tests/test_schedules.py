@@ -16,6 +16,7 @@ from app.main import create_app
 from app.messages import Messages
 from app.schedules import (
     PER_USER,
+    RESEND,
     Notifier,
     ScheduleRequestV1,
     Schedules,
@@ -60,6 +61,8 @@ def test_allowed_email_and_first_number():
     assert allowed_email("Me@Example.com", allow) and allowed_email("a@team.example", allow)
     assert not allowed_email("other@example.com", allow) and not allowed_email("a@evil.team.example", allow)
     assert not allowed_email("me@example.com", [])
+    for bad in ("me@", "@example.com", "a@b@example.com", "a b@example.com", "me@localhost", "me@example..com"):
+        assert not allowed_email(bad, ["example.com", "localhost"]), bad
     assert first_number(Answer(question="q", rows=[["North", 12, 3.5]])) == 12.0
     assert first_number(Answer(question="q", rows=[["North", True]])) is None
     assert first_number(Answer(question="q")) is None
@@ -70,7 +73,7 @@ class Outbox:
         self.email, self.telegram, self.telegram_ok = [], [], True
 
     def post(self, url, json=None, timeout=None, headers=None):
-        if url.startswith("https://api.resend.com"):
+        if url == RESEND:
             self.email.append(json)
             return httpx.Response(200, json={"id": "e1"}, request=httpx.Request("POST", url))
         self.telegram.append(json)
@@ -132,7 +135,7 @@ def test_a_weekly_report_is_emailed_and_failures_are_recorded(world, db):
     assert sorted(lines) == sorted([f"{report.id}: sent", f"{broken.id}: failed"])
     [mail] = out.email
     assert mail["to"] == ["me@example.com"] and mail["subject"] == "Your weekly report: How many orders?"
-    assert "<pre" in mail["html"] and "https://app.example" in mail["html"]
+    assert "<pre" in mail["html"] and '<a href="https://app.example">' in mail["html"]
     statuses = {s.id: s.last_status for s in store.list(me.id)}
     assert statuses[report.id] == "sent" and statuses[broken.id].startswith("failed: RuntimeError")
 

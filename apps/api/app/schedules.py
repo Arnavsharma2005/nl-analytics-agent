@@ -36,7 +36,6 @@ PER_USER = 10
 RESEND = "https://api.resend.com/emails"
 OPS: dict[str, Callable[[float, float], bool]] = {">": operator.gt, ">=": operator.ge, "<": operator.lt,
                                                     "<=": operator.le}
-EMAIL = re.compile(r"^[^@\s]+@([^@\s]+\.[^@\s]+)$")
 Channel = Literal["email", "telegram"]
 
 
@@ -63,7 +62,7 @@ class ScheduleRequestV1(BaseModel):
         if (self.kind == "alert") != (self.alert is not None):
             raise ValueError("an alert needs `alert` (op and value), and a report must not have one")
         self.to = self.to.strip()
-        if self.channel == "email" and not EMAIL.match(self.to):
+        if self.channel == "email" and email_domain(self.to) is None:
             raise ValueError("`to` must be an email address")
         if self.channel == "telegram" and not re.fullmatch(r"-?\d{1,20}", self.to):
             raise ValueError("`to` must be a Telegram chat id, a number")
@@ -106,11 +105,19 @@ def first_number(answer: Answer) -> float | None:
     return None
 
 
+def email_domain(address: str) -> str | None:
+    """The domain of a plain address like name@example.com, or None. (No regular expression: addresses are input.)"""
+    local, at, domain = address.partition("@")
+    if not at or not local or "@" in domain or any(c.isspace() for c in address):
+        return None
+    labels = domain.split(".")
+    return domain.lower() if len(labels) > 1 and all(labels) else None
+
+
 def allowed_email(address: str, allowlist: list[str]) -> bool:
-    match = EMAIL.match(address.strip())
-    if not match:
+    domain = email_domain(address.strip())
+    if domain is None:
         return False
-    domain = match.group(1).lower()
     return any(a.lower() in (address.strip().lower(), domain, "@" + domain) for a in allowlist)
 
 
