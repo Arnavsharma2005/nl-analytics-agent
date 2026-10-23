@@ -27,6 +27,7 @@ from app.api_keys import keys_router
 from app.api_mcp import mcp_route, mcp_server
 from app.api_reports import reports_router
 from app.api_shares import shares_router
+from app.api_telegram import telegram_router
 from app.api_v1 import v1_router
 from app.auth import GitHub, Users
 from app.brief import database
@@ -50,6 +51,7 @@ from app.providers import build_embedder, build_llm
 from app.reports import Reports
 from app.sessions import COOKIE, Sessions, Turnstile
 from app.shares import Shares
+from app.telegram import TelegramBot, TelegramClient
 from app.transcribe import Transcriber
 from app.usage import Counters, DailyBudget, Quota, Visitor
 
@@ -231,7 +233,7 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
                shares_factory=get_shares, sheets_factory=SheetsClient, curation_factory=get_curation,
                library_pr_factory=get_library_pr, insights_factory=get_insights,
                reports_factory=get_reports, deep_analysis_factory=get_deep_analysis,
-               api_keys_factory=get_api_keys) -> FastAPI:
+               api_keys_factory=get_api_keys, telegram_factory=None) -> FastAPI:
     settings = get_settings()
 
     mcp = None  # the MCP server, made below once `spend` exists
@@ -324,6 +326,14 @@ def create_app(analyst_factory=get_analyst, db_factory=get_db, llm_factory=get_l
     app.include_router(reports_router(reports=reports_factory, analysis=deep_analysis_factory, counters=get_counters,
                                       identify=identify, per_day=settings.reports_per_day,
                                       enabled=settings.deep_analysis))
+
+    if settings.telegram_bot_token and settings.telegram_webhook_secret:
+        def make_bot() -> TelegramBot:
+            return TelegramBot(TelegramClient(settings.telegram_bot_token), analyst_factory, messages_factory, spend,
+                               charts=settings.telegram_charts)
+
+        bot = telegram_factory or lru_cache(make_bot)  # one bot, so /new is remembered across updates
+        app.include_router(telegram_router(bot=bot, secret=settings.telegram_webhook_secret))
 
     app.include_router(keys_router(keys=api_keys_factory, sessions=sessions_factory, enabled=settings.api_keys))
 
