@@ -175,6 +175,16 @@ class Settings(BaseSettings):
     # Speech to text for voice questions, with Whisper on Groq (needs GROQ_API_KEY). Empty turns voice off.
     transcribe_model: str | None = "whisper-large-v3-turbo"
 
+    # --- Observability (app/observability.py); each part is off until its keys are set. ---------------------------
+    # Which deployment this is ("production", "staging"), so errors and traces can be told apart.
+    app_env: str = "development"
+    sentry_dsn: str | None = None
+    sentry_traces_sample_rate: float = Field(default=0.0, ge=0, le=1)
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_sample_rate: float = Field(default=1.0, ge=0, le=1)
+
     # Set by Render on every deploy; reported by /healthz so you can tell which build is live.
     git_commit: str | None = Field(default=None, validation_alias=AliasChoices("GIT_COMMIT", "RENDER_GIT_COMMIT"))
 

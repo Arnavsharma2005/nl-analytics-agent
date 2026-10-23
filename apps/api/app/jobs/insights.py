@@ -18,12 +18,14 @@ from app.brief import database
 from app.config import get_settings
 from app.db import Database
 from app.insights_feed import InsightsFeed
+from app.observability import init_sentry
 from app.providers import build_llm, build_providers
 
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     s = get_settings()
+    init_sentry(s)
     drivers = driver_analysis.load()
     if drivers is None:
         print("No drivers.yml in the semantic folder, so there are no metrics to scan.")

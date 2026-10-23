@@ -12,18 +12,23 @@ import sys
 
 from app.config import get_settings
 from app.main import get_analyst, get_flags, get_notifier, get_schedules
+from app.observability import get_tracing, init_sentry
 from app.schedules import run_due
 
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     s = get_settings()
+    init_sentry(s)
     flags = get_flags()
     if flags.audiences()["schedules"] == "off":
         print("Schedules are off (the SCHEDULES setting or the schedules flag); nothing to run.")
         return 0
-    lines = run_due(get_schedules(), get_analyst(), get_notifier(), s.public_url,
-                    allowed=lambda user: flags.on("schedules", user))
+    try:
+        lines = run_due(get_schedules(), get_analyst(), get_notifier(), s.public_url,
+                        allowed=lambda user: flags.on("schedules", user))
+    finally:
+        get_tracing().flush()
     print(f"{len(lines)} schedules were due")
     for line in lines:
         print(f"- {line}")

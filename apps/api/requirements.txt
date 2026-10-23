@@ -16,3 +16,5 @@ httpx2==2.16.0
 mcp==2.3.0
 python-multipart==0.0.32
 duckdb==2.0.0
+sentry-sdk[fastapi]==2.73.0
+langfuse==5.0.4
