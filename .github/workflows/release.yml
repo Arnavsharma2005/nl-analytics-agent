@@ -99,7 +99,7 @@ jobs:
       - uses: actions/setup-node@v7  # set-version.sh uses npm for the TypeScript packages
         with:
           node-version: 22
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: packages/set-version.sh "${GITHUB_REF_NAME#v}"

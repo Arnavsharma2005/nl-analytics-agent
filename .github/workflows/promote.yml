@@ -95,7 +95,7 @@ jobs:
           echo "::error::Production did not start $SHA in 20 minutes. Check the deploy in Render."; exit 1
       - name: Ready
         run: curl -fsS --max-time 60 "$PRODUCTION_URL/readyz" | jq -e '.status == "ok"'
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: env.SMOKE_API_KEY != ''
         with:
           python-version: "3.12"
