@@ -40,7 +40,7 @@ jobs:
           fi
       - uses: actions/checkout@v7
         if: steps.ready.outputs.go == 'true'
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: steps.ready.outputs.go == 'true'
         with:
           python-version: "3.12"
